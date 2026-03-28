@@ -26,3 +26,9 @@ local.properties
 # Compiled jars
 *.jar
 !gradle/wrapper/*.jar
+
+# Minecraft merge files
+**/minecraft-merged-*
+
+# Loom cache
+**/loom-cache/**

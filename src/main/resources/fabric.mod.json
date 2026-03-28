@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "suncat",
+  "version": "${version}",
+  "name": "SunCat Client",
+  "description": "SunCat Client (太阳猫端)",
+  "authors": [
+    "riri_tata"
+  ],
+  "accessWidener": "suncat.accesswidener",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.idhammai.suncat"
+    ]
+  },
+  "mixins": [
+    "suncat.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "1.21.1",
+    "java": ">=17"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
