@@ -1,8 +1,10 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "dev.idhammai.asm",
+  "package": "dev.suncat.asm",
   "compatibilityLevel": "JAVA_21",
+  "refMap": "suncat-refmap.json",
+  "priority": 1000,
   "client": [
     "accessors.IChatHud",
     "accessors.IContainerComponent",

@@ -10,6 +10,10 @@ group = project.maven_group
 loom {
     accessWidenerPath = file("src/main/resources/suncat.accesswidener")
     customMinecraftManifest = "https://bmclapi2.bangbang93.com/versions/1.21.1/1.21.1.json"
+
+    mixin {
+        useLegacyMixinAp = true
+    }
 }
 
 repositories {
