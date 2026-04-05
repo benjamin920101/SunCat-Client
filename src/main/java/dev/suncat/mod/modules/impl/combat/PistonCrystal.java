@@ -241,7 +241,7 @@ public class PistonCrystal extends Module
     }
     
     public boolean check(final boolean onlyStatic, final boolean onGround, final boolean onlyGround) {
-        return (MovementUtil.isMoving() && onlyStatic) || (onGround && onlyGround) || this.findBlock(Blocks.REDSTONE_TORCH) == -1 || this.findClass(PistonBlock.class) == -1 || this.findItem(Items.END_CRYSTAL) == -1;
+        return (MovementUtil.isMoving() && onlyStatic) || (onGround && onlyGround) || this.findBlock(Blocks.REDSTONE_BLOCK) == -1 || this.findClass(PistonBlock.class) == -1 || this.findItem(Items.END_CRYSTAL) == -1;
     }
     
     private boolean checkCrystal(final BlockPos pos) {
@@ -403,7 +403,7 @@ public class PistonCrystal extends Module
             this.cleanQueue.add(pos);
             this.cleanQueue.add(pos.offset(facing, -1));
             for (final Direction dir : Direction.values()) {
-                if (this.getBlock(pos.offset(dir)) == Blocks.REDSTONE_TORCH) {
+                if (this.getBlock(pos.offset(dir)) == Blocks.REDSTONE_BLOCK) {
                     this.cleanQueue.add(pos.offset(dir));
                 }
             }
@@ -467,11 +467,11 @@ public class PistonCrystal extends Module
             return;
         }
         for (final Direction i : Direction.values()) {
-            if (this.getBlock(pos.offset(i)) == Blocks.REDSTONE_TORCH) {
+            if (this.getBlock(pos.offset(i)) == Blocks.REDSTONE_BLOCK) {
                 return;
             }
         }
-        final int power = this.findBlock(Blocks.REDSTONE_TORCH);
+        final int power = this.findBlock(Blocks.REDSTONE_BLOCK);
         if (power == -1) {
             return;
         }
@@ -560,7 +560,7 @@ public class PistonCrystal extends Module
             return;
         }
         final Block block = this.getBlock(pos);
-        if (block != Blocks.PISTON && block != Blocks.STICKY_PISTON && block != Blocks.REDSTONE_TORCH && block != Blocks.OBSIDIAN) {
+        if (block != Blocks.PISTON && block != Blocks.STICKY_PISTON && block != Blocks.REDSTONE_BLOCK && block != Blocks.OBSIDIAN) {
             return;
         }
         if (!PistonCrystal.mc.world.isAir(pos) && block != Blocks.OBSIDIAN && block != Blocks.BEDROCK) {

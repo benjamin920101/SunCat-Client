@@ -13,7 +13,7 @@ import dev.suncat.mod.modules.settings.impl.StringSetting;
 public class Fonts
 extends Module {
     public static Fonts INSTANCE;
-        public final StringSetting font = this.add(new StringSetting("Font", "default").injectTask(this::refresh));
+    public final StringSetting font = this.add(new StringSetting("Font", "default").injectTask(this::refresh));
     public final StringSetting alternate = this.add(new StringSetting("Alternate", "msyh").injectTask(this::refresh));
     public final EnumSetting<Style> style = this.add(new EnumSetting<Style>("Style", Style.PLAIN).injectTask(this::refresh));
     public final SliderSetting size = this.add(new SliderSetting("Size", 8.0, 1.0, 15.0, 1.0).injectTask(this::refresh));
@@ -23,7 +23,7 @@ extends Module {
 
     public Fonts() {
         super("Fonts", Module.Category.Client);
-        this.setChinese("\u5b57\u4f53");
+        this.setChinese("字体");
         INSTANCE = this;
     }
 

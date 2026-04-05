@@ -1,7 +1,8 @@
 /*
  * Decompiled with CFR 0.152.
- * 
+ *
  * Could not load the following classes:
+ *  net.minecraft.client.MinecraftClient
  *  net.minecraft.entity.EntityPose
  *  net.minecraft.entity.player.PlayerEntity
  *  net.minecraft.util.math.Vec3d
@@ -18,8 +19,11 @@ import dev.suncat.api.events.Event;
 import dev.suncat.api.events.impl.JumpEvent;
 import dev.suncat.api.events.impl.TravelEvent;
 import dev.suncat.api.utils.Wrapper;
+import dev.suncat.asm.accessors.ILivingEntity;
+import dev.suncat.core.impl.RotationManager;
 import dev.suncat.mod.modules.impl.client.ClientSetting;
 import dev.suncat.mod.modules.impl.player.InteractTweaks;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
@@ -87,5 +91,29 @@ implements Wrapper {
         TravelEvent event = TravelEvent.get(Event.Stage.Post, player);
         suncat.EVENT_BUS.post(event);
     }
+
+    // 禁用此 mixin 以防止视角抽搐 - 它与 MixinClientPlayerEntity 的旋转逻辑冲突
+    /*
+    @Inject(method={"tickNewAi"}, at={@At(value="FIELD", target="Lnet/minecraft/entity/player/PlayerEntity;headYaw:F")})
+    public void updateHeadRotation(CallbackInfo ci) {
+        PlayerEntity player = (PlayerEntity)PlayerEntity.class.cast(this);
+        if (player != MinecraftClient.getInstance().player) {
+            return;
+        }
+
+        float yaw = player.getYaw();
+        float pitch = player.getPitch();
+
+        // Apply module rotation to head for visual sync
+        if (RotationManager.INSTANCE.getRotation() != null) {
+            yaw = RotationManager.INSTANCE.getRotation().yaw;
+            pitch = RotationManager.INSTANCE.getRotation().pitch;
+        }
+
+        // Set head rotation for visual rendering
+        ((ILivingEntity) player).setHeadYaw(yaw);
+        player.setPitch(pitch);
+    }
+    */
 }
 

@@ -57,6 +57,7 @@ implements Wrapper {
         this.registerCommand(new FriendCommand());
         this.registerCommand(new XrayCommand());
         this.registerCommand(new GamemodeCommand());
+        this.registerCommand(new GcCommand());
         this.registerCommand(new KitCommand());
         this.registerCommand(new LoadCommand());
         this.registerCommand(new PingCommand());

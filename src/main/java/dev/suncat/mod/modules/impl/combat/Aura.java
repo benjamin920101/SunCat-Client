@@ -270,6 +270,24 @@ extends Module {
         Entity target = null;
         double getDistance = range;
         double maxHealth = 36.0;
+
+        // 优先攻击敌人列表中的玩家
+        if (dev.suncat.mod.modules.impl.combat.EnemyList.INSTANCE != null) {
+            for (Entity entity : suncat.THREAD.getEntities()) {
+                if (!(entity instanceof PlayerEntity)) continue;
+                if (!dev.suncat.mod.modules.impl.combat.EnemyList.INSTANCE.isEnemy((PlayerEntity) entity)) continue;
+                if (!CombatUtil.isValid(entity)) continue;
+
+                Vec3d hitVec = this.getAttackVec(entity);
+                if (Aura.mc.player.getEyePos().distanceTo(hitVec) > range) continue;
+
+                target = entity;
+                getDistance = Aura.mc.player.getEyePos().distanceTo(hitVec);
+                return target;
+            }
+        }
+
+        // 敌人列表中没有在线玩家，攻击普通目标
         for (Entity entity : suncat.THREAD.getEntities()) {
             if (!this.isEnemy(entity)) continue;
             Vec3d hitVec = this.getAttackVec(entity);

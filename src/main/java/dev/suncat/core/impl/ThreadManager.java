@@ -101,18 +101,35 @@ implements Wrapper {
                 try {
                     while (true) {
                         if (ThreadManager.this.tickRunning) {
-                            Thread.onSpinWait();
+                            // Tick 运行时短暂休眠，避免占用 CPU
+                            Thread.sleep(5);
                             continue;
                         }
+                        // Tick 未运行时执行模块逻辑
                         AutoCrystal.INSTANCE.onThread();
                         HoleESP.INSTANCE.onThread();
                         AutoAnchor.INSTANCE.onThread();
+                        
+                        // 每轮循环后短暂休眠，避免 busy loop
+                        Thread.sleep(10);
                     }
+                }
+                catch (InterruptedException e) {
+                    // 中断异常正常处理
+                    Thread.currentThread().interrupt();
+                    break;
                 }
                 catch (Exception e) {
                     e.printStackTrace();
                     if (ClientSetting.INSTANCE.debug.getValue()) {
                         CommandManager.sendMessage("\u00a74An error has occurred [Thread] Message: [" + e.getMessage() + "]");
+                    }
+                    // 错误后添加冷却时间，避免频繁报错
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
                 }
             }

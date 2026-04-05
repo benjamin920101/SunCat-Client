@@ -53,6 +53,7 @@ import net.minecraft.entity.MovementType;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
+import net.minecraft.item.ArmorItem;
 import net.minecraft.item.ElytraItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -104,6 +105,12 @@ extends Module {
     private final SliderSetting infiniteMinSpeed = this.add(new SliderSetting("InfiniteMinSpeed", 25.0, 10.0, 70.0, () -> this.mode.getValue() == Mode.Pitch));
     private final SliderSetting infiniteMaxHeight = this.add(new SliderSetting("InfiniteMaxHeight", 200, -50, 360, () -> this.mode.getValue() == Mode.Pitch));
     public final BooleanSetting releaseSneak = this.add(new BooleanSetting("ReleaseSneak", false));
+    
+    // Grim 切甲模式设置
+    private final BooleanSetting grimPitch = this.add(new BooleanSetting("GrimPitch", true, () -> this.mode.is(Mode.Grim)));
+    private final BooleanSetting grimFirework = this.add(new BooleanSetting("GrimFirework", false, () -> this.mode.is(Mode.Grim)));
+    private final Timer fireworkDelay = new Timer();
+    
     private final Timer instantFlyTimer = new Timer();
     boolean prev;
     float prePitch;
@@ -237,6 +244,11 @@ extends Module {
             return;
         }
         if (this.mode.is(Mode.Rotation)) {
+            // 当 TargetFollow 开启时，不干预 rotation，让它自己控制
+            if (dev.suncat.mod.modules.impl.movement.TargetFollow.INSTANCE != null &&
+                dev.suncat.mod.modules.impl.movement.TargetFollow.INSTANCE.isOn()) {
+                return;
+            }
             if (this.isFallFlying()) {
                 if (MovementUtil.isMoving()) {
                     if (ElytraFly.mc.options.jumpKey.isPressed()) {
@@ -278,6 +290,13 @@ extends Module {
     public void onUpdate(UpdateEvent event) {
         this.getInfinitePitch();
         this.flying = false;
+
+        // Grim 切甲模式处理
+        if (this.mode.is(Mode.Grim)) {
+            this.handleGrimMode(event);
+            return;
+        }
+
         if (this.packet.getValue()) {
             this.hasElytra = InventoryUtil.findItemInventorySlot(Items.ELYTRA) != -1;
         } else {
@@ -397,6 +416,14 @@ extends Module {
         if (ElytraFly.nullCheck()) {
             return;
         }
+        
+        // Grim 模式取消跳跃
+        if (this.mode.is(Mode.Grim)) {
+            if (event.isPre()) {
+                ElytraFly.mc.options.jumpKey.setPressed(false);
+            }
+        }
+        
         if (this.mode.is(Mode.Bounce) && this.hasElytra) {
             if (this.autoJump.getValue()) {
                 ElytraFly.mc.options.jumpKey.setPressed(true);
@@ -561,6 +588,84 @@ extends Module {
         MovementUtil.setMotionZ(f);
     }
 
+    /**
+     * Sn0w Grim 切甲模式 - 快速切换鞘翅实现飞行
+     */
+    private void handleGrimMode(UpdateEvent event) {
+        if (ElytraFly.nullCheck()) return;
+        
+        // 检查鞘翅是否在背包中
+        int elytraSlot = InventoryUtil.findItem(Items.ELYTRA);
+        boolean hasElytraInInv = elytraSlot != -1;
+        boolean isElytraEquipped = ElytraFly.mc.player.getInventory().armor.get(2).getItem() == Items.ELYTRA;
+        
+        if (!hasElytraInInv && !isElytraEquipped) {
+            return;  // 没有鞘翅，直接返回
+        }
+        
+        // 检查移动输入
+        boolean isMoving = MovementUtil.isMoving();
+        boolean jumpPressed = ElytraFly.mc.options.jumpKey.isPressed();
+        boolean sneakPressed = ElytraFly.mc.options.sneakKey.isPressed();
+        
+        if (!isMoving && !jumpPressed && !sneakPressed) {
+            // 没有移动输入，不处理
+            return;
+        }
+        
+        // 如果不在滑翔状态，执行切甲飞行
+        if (!this.isFallFlying()) {
+            boolean swapBack = false;
+            int originalSlot = -1;
+            
+            // 如果没有穿鞘翅，临时穿上
+            if (!isElytraEquipped && hasElytraInInv) {
+                // 保存当前胸甲槽位
+                originalSlot = elytraSlot;
+                
+                // 快速切换鞘翅到胸甲槽位
+                ElytraFly.mc.interactionManager.clickSlot(
+                    ElytraFly.mc.player.currentScreenHandler.syncId, 
+                    6,  // 胸甲槽位
+                    elytraSlot, 
+                    SlotActionType.SWAP, 
+                    ElytraFly.mc.player
+                );
+                swapBack = true;
+            }
+            
+            // 发送开始滑翔包
+            mc.getNetworkHandler().sendPacket(
+                new ClientCommandC2SPacket(ElytraFly.mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING)
+            );
+            ElytraFly.mc.player.startFallFlying();
+            
+            // 可选：使用烟花加速
+            if (this.grimFirework.getValue()) {
+                if (!ElytraFly.mc.player.isOnGround() && this.fireworkDelay.passed(400L)) {
+                    this.off();  // 使用烟花
+                    this.fireworkDelay.reset();
+                }
+            }
+            
+            // 立即切换回原来的装备
+            if (swapBack && originalSlot != -1) {
+                ElytraFly.mc.interactionManager.clickSlot(
+                    ElytraFly.mc.player.currentScreenHandler.syncId, 
+                    6,  // 胸甲槽位
+                    originalSlot, 
+                    SlotActionType.SWAP, 
+                    ElytraFly.mc.player
+                );
+            }
+        }
+        
+        // 在地面上时自动跳跃（类似 Sn0w 的实现）
+        if (ElytraFly.mc.player.isOnGround()) {
+            ElytraFly.mc.player.jump();
+        }
+    }
+
     private void getInfinitePitch() {
         this.lastInfinitePitch = this.infinitePitch;
         double currentPlayerSpeed = Math.hypot(ElytraFly.mc.player.getX() - ElytraFly.mc.player.prevX, ElytraFly.mc.player.getZ() - ElytraFly.mc.player.prevZ);
@@ -582,6 +687,19 @@ extends Module {
         return ElytraFly.mc.player.isFallFlying() || this.packet.getValue() && this.hasElytra && !ElytraFly.mc.player.isOnGround() || this.flying;
     }
 
+    /**
+     * 静态方法：检查是否正在 Grim 模式飞行
+     * 用于其他模块（如 LongJump、Flight）检测
+     */
+    public static boolean isGrimFlying() {
+        if (!INSTANCE.isOn() || !INSTANCE.mode.is(Mode.Grim)) {
+            return false;
+        }
+        int elytraSlot = InventoryUtil.findItem(Items.ELYTRA);
+        boolean isElytraEquipped = mc.player.getInventory().armor.get(2).getItem() == Items.ELYTRA;
+        return elytraSlot != -1 || isElytraEquipped;
+    }
+
     public static enum Mode {
         Control,
         Boost,
@@ -589,7 +707,8 @@ extends Module {
         Freeze,
         None,
         Rotation,
-        Pitch;
+        Pitch,
+        Grim;
 
     }
 
@@ -618,6 +737,17 @@ extends Module {
                 this.press = false;
             }
         }
+    }
+
+    // Sn0w Grim Flight doBoost method - applies acceleration based on player yaw
+    private static final float GRIM_AIR_FRICTION = 0.0264444413f;
+
+    public static void doBoost(MoveEvent event) {
+        float yaw = mc.player.getYaw();
+        final double x = GRIM_AIR_FRICTION * Math.cos(Math.toRadians(yaw + 90.0f));
+        final double z = GRIM_AIR_FRICTION * Math.sin(Math.toRadians(yaw + 90.0f));
+        event.setX(event.getX() + x);
+        event.setZ(event.getZ() + z);
     }
 }
 

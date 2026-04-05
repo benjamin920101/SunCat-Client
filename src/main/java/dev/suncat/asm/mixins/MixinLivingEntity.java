@@ -102,20 +102,26 @@ extends Entity {
         return instance.getYaw();
     }
 
-    // StrafeFix - replace pitch in travel
+    // StrafeFix - replace pitch in travel (Sn0w style)
     @Redirect(method={"travel"}, at=@At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;getPitch()F"), require=0)
     public float replacePitch(LivingEntity instance) {
-        if (AntiCheat.INSTANCE.strafeFix.getValue() && (Entity)LivingEntity.class.cast((Object)this) == MinecraftClient.getInstance().player && RotationManager.INSTANCE.getRotation() != null) {
-            return RotationManager.INSTANCE.getRotation().pitch;
+        // Sn0w StrafeFix: 强制使用客户端旋转俯仰角修复移动同步
+        if ((Entity)LivingEntity.class.cast((Object)this) == MinecraftClient.getInstance().player) {
+            if (AntiCheat.INSTANCE.strafeFix.getValue() && RotationManager.INSTANCE.getRotation() != null) {
+                return RotationManager.INSTANCE.getRotation().pitch;
+            }
         }
         return instance.getPitch();
     }
 
-    // StrafeFix - replace rotation vector in travel
+    // StrafeFix - replace rotation vector in travel (Sn0w style)
     @Redirect(method={"travel"}, at=@At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;getRotationVector()Lnet/minecraft/util/math/Vec3d;"), require=0)
     public Vec3d replaceVelocity(LivingEntity instance) {
-        if (AntiCheat.INSTANCE.strafeFix.getValue() && (Entity)LivingEntity.class.cast((Object)this) == MinecraftClient.getInstance().player && RotationManager.INSTANCE.getRotation() != null) {
-            return RotationManager.INSTANCE.getRotationVector();
+        // Sn0w StrafeFix: 强制使用客户端旋转向量修复移动方向
+        if ((Entity)LivingEntity.class.cast((Object)this) == MinecraftClient.getInstance().player) {
+            if (AntiCheat.INSTANCE.strafeFix.getValue() && RotationManager.INSTANCE.getRotation() != null) {
+                return RotationManager.INSTANCE.getRotationVector();
+            }
         }
         return instance.getRotationVector();
     }

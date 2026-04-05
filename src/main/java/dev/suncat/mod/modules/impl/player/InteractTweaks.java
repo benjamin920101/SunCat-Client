@@ -48,6 +48,7 @@ extends Module {
     private final BooleanSetting pickaxeSwitch = this.add(new BooleanSetting("SwitchEat", false).setParent());
     private final BooleanSetting allowSword = this.add(new BooleanSetting("Sword", true, this.pickaxeSwitch::isOpen));
     private final BooleanSetting allowPickaxe = this.add(new BooleanSetting("Pickaxe", true, this.pickaxeSwitch::isOpen));
+    private final BooleanSetting allowTotem = this.add(new BooleanSetting("Totem", false, this.pickaxeSwitch::isOpen));
     private final BooleanSetting reach = this.add(new BooleanSetting("Reach", false));
     public final SliderSetting blockRange = this.add(new SliderSetting("BlockRange", 5.0, 0.0, 15.0, 0.1, this.reach::getValue));
     public final SliderSetting entityRange = this.add(new SliderSetting("EntityRange", 5.0, 0.0, 15.0, 0.1, this.reach::getValue));
@@ -71,29 +72,55 @@ extends Module {
         if (InteractTweaks.mc.itemUseCooldown <= 4 - this.delay.getValueInt()) {
             InteractTweaks.mc.itemUseCooldown = 0;
         }
+        
+        // 切换逻辑（苹果/图腾）
         if (this.pickaxeSwitch.getValue()) {
-            if (!(InteractTweaks.mc.player.getMainHandStack().getItem() instanceof PickaxeItem && this.allowPickaxe.getValue() || InteractTweaks.mc.player.getMainHandStack().getItem() instanceof SwordItem && this.allowSword.getValue() || InteractTweaks.mc.player.getMainHandStack().getItem() == Items.ENCHANTED_GOLDEN_APPLE || InteractTweaks.mc.player.getMainHandStack().getItem() == Items.GOLDEN_APPLE)) {
-                this.swapped = false;
-                return;
-            }
-            int gapple = InventoryUtil.findItem(Items.ENCHANTED_GOLDEN_APPLE);
-            if (gapple == -1) {
-                gapple = InventoryUtil.findItem(Items.GOLDEN_APPLE);
-            }
-            if (gapple == -1) {
+            boolean holdingSword = InteractTweaks.mc.player.getMainHandStack().getItem() instanceof SwordItem && this.allowSword.getValue();
+            boolean holdingPickaxe = InteractTweaks.mc.player.getMainHandStack().getItem() instanceof PickaxeItem && this.allowPickaxe.getValue();
+            boolean holdingTotemMain = InteractTweaks.mc.player.getMainHandStack().getItem() == Items.TOTEM_OF_UNDYING && this.allowTotem.getValue();
+            boolean holdingGapple = InteractTweaks.mc.player.getMainHandStack().getItem() == Items.ENCHANTED_GOLDEN_APPLE;
+            boolean holdingNormalApple = InteractTweaks.mc.player.getMainHandStack().getItem() == Items.GOLDEN_APPLE;
+
+            // 检查当前手持物品是否是允许切换的类型
+            boolean holdingAllowedItem = holdingSword || holdingPickaxe || holdingTotemMain || holdingGapple || holdingNormalApple;
+
+            if (!holdingAllowedItem) {
                 if (this.swapped) {
                     InventoryUtil.switchToSlot(this.lastSlot);
                     this.swapped = false;
                 }
                 return;
             }
+
+            // 寻找苹果（优先附魔金苹果）
+            int gappleSlot = InventoryUtil.findItem(Items.ENCHANTED_GOLDEN_APPLE);
+            if (gappleSlot == -1) {
+                gappleSlot = InventoryUtil.findItem(Items.GOLDEN_APPLE);
+            }
+
+            // 如果没有苹果，恢复原物品
+            if (gappleSlot == -1) {
+                if (this.swapped) {
+                    InventoryUtil.switchToSlot(this.lastSlot);
+                    this.swapped = false;
+                }
+                return;
+            }
+
+            // 按使用键时切换
             if (InteractTweaks.mc.options.useKey.isPressed()) {
-                if ((InteractTweaks.mc.player.getMainHandStack().getItem() instanceof PickaxeItem && this.allowPickaxe.getValue() || InteractTweaks.mc.player.getMainHandStack().getItem() instanceof SwordItem && this.allowSword.getValue()) && InteractTweaks.mc.player.getOffHandStack().getItem() != Items.ENCHANTED_GOLDEN_APPLE && InteractTweaks.mc.player.getMainHandStack().getItem() != Items.GOLDEN_APPLE) {
+                // 检查当前是否可以切换：主手是剑/镐/图腾，且当前主手不是苹果
+                boolean canSwitch = (holdingSword || holdingPickaxe || holdingTotemMain) && !holdingGapple && !holdingNormalApple;
+
+                if (canSwitch) {
                     this.lastSlot = InteractTweaks.mc.player.getInventory().selectedSlot;
-                    InventoryUtil.switchToSlot(gapple);
+
+                    // 切换到苹果（无论是剑、镐还是图腾，都切换到苹果）
+                    InventoryUtil.switchToSlot(gappleSlot);
                     this.swapped = true;
                 }
             } else if (this.swapped) {
+                // 松开使用键后恢复
                 InventoryUtil.switchToSlot(this.lastSlot);
                 this.swapped = false;
             }

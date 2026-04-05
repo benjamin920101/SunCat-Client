@@ -456,21 +456,16 @@ public class EnderChestRefill extends Module {
                     break;
                 }
 
-                int toTake = stack.getCount();
-                for (int click = 0; click < toTake; click++) {
-                    mc.interactionManager.clickSlot(handler.syncId, slot, 0, SlotActionType.PICKUP, mc.player);
-                    waitTicks = 1;
+                // 找到背包空位
+                int emptySlot = findEmptySlotInInventory();
+                if (emptySlot != -1) {
+                    // 使用 QUICK_MOVE 直接快速转移
+                    mc.interactionManager.clickSlot(handler.syncId, slot, 0, SlotActionType.QUICK_MOVE, mc.player);
+                    waitTicks = 2;
+                    takenCount++;
 
-                    // 找到背包空位并放入
-                    int emptySlot = findEmptySlotInInventory();
-                    if (emptySlot != -1) {
-                        mc.interactionManager.clickSlot(handler.syncId, emptySlot, 0, SlotActionType.PICKUP, mc.player);
-                        waitTicks = 1;
-                        takenCount++;
-
-                        if (debug.getValue()) {
-                            sendMessage("§a[ECRefill] §7已拿取 1 个 " + shulkerColor.getValue().getDisplayName() + " 潜影箱 (剩余空位：" + (emptySlots - takenCount) + ")");
-                        }
+                    if (debug.getValue()) {
+                        sendMessage("§a[ECRefill] §7已拿取 1 个 " + shulkerColor.getValue().getDisplayName() + " 潜影箱 (剩余空位：" + (emptySlots - takenCount) + ")");
                     }
                 }
             }
@@ -487,7 +482,7 @@ public class EnderChestRefill extends Module {
         }
 
         processStep = 5;
-        waitTicks = 3;
+        waitTicks = 5;
     }
 
     /**

@@ -44,6 +44,7 @@ import dev.suncat.mod.modules.impl.exploit.PacketControl;
 import dev.suncat.mod.modules.impl.movement.NoSlow;
 import dev.suncat.mod.modules.impl.movement.Velocity;
 import dev.suncat.mod.modules.impl.player.Freecam;
+import dev.suncat.api.utils.player.MovementUtil;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.input.Input;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
@@ -72,6 +73,12 @@ extends AbstractClientPlayerEntity {
     @Final
     @Shadow
     protected MinecraftClient client;
+    @Unique
+    private double preX;
+    @Unique
+    private double preY;
+    @Unique
+    private double preZ;
     @Unique
     private float preYaw;
     @Unique
@@ -340,12 +347,18 @@ extends AbstractClientPlayerEntity {
     @Unique
     private void rotation() {
         this.rotation = true;
+        // 保存原始坐标和旋转
+        this.preX = this.getX();
+        this.preY = this.getY();
+        this.preZ = this.getZ();
         this.preYaw = this.getYaw();
         this.prePitch = this.getPitch();
-        SendMovementPacketsEvent event = SendMovementPacketsEvent.get(this.getYaw(), this.getPitch());
+        SendMovementPacketsEvent event = SendMovementPacketsEvent.get(this.getX(), this.getY(), this.getZ(), this.getYaw(), this.getPitch());
         suncat.EVENT_BUS.post(event);
         suncat.ROTATION.rotationYaw = event.getYaw();
         suncat.ROTATION.rotationPitch = event.getPitch();
+        // 使用事件中的坐标和旋转值
+        this.setPosition(event.getX(), event.getY(), event.getZ());
         this.setYaw(event.getYaw());
         this.setPitch(event.getPitch());
     }
@@ -353,6 +366,8 @@ extends AbstractClientPlayerEntity {
     @Inject(method={"sendMovementPackets"}, at={@At(value="TAIL")})
     private void onSendMovementPacketsTail(CallbackInfo info) {
         if (this.rotation) {
+            // 恢复原始坐标和旋转
+            this.setPosition(this.preX, this.preY, this.preZ);
             this.setYaw(this.preYaw);
             this.setPitch(this.prePitch);
             this.rotation = false;
@@ -362,6 +377,8 @@ extends AbstractClientPlayerEntity {
     @Inject(method={"tick"}, at={@At(value="INVOKE", target="Lnet/minecraft/client/network/ClientPlayNetworkHandler;sendPacket(Lnet/minecraft/network/packet/Packet;)V", ordinal=1, shift=At.Shift.AFTER)})
     private void onTickHasVehicleAfterSendPackets(CallbackInfo info) {
         if (this.rotation) {
+            // 恢复原始坐标和旋转
+            this.setPosition(this.preX, this.preY, this.preZ);
             this.setYaw(this.preYaw);
             this.setPitch(this.prePitch);
             this.rotation = false;

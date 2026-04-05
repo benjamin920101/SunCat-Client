@@ -32,6 +32,7 @@ extends Module {
     public final EnumSetting<SwingSide> interactSwing = this.add(new EnumSetting<SwingSide>("InteractSwing", SwingSide.All, () -> this.page.is(Page.General)));
     public final EnumSetting<SwingSide> attackSwing = this.add(new EnumSetting<SwingSide>("AttackSwing", SwingSide.All, () -> this.page.is(Page.General)));
     public final BooleanSetting grimRotation = this.add(new BooleanSetting("GrimRotation", false, () -> this.page.is(Page.Rotation)));
+    public final BooleanSetting grimProtocol = this.add(new BooleanSetting("GrimProtocol", false, () -> this.page.is(Page.Rotation)));
     public final EnumSetting<SnapBack> snapBackEnum = this.add(new EnumSetting<SnapBack>("SnapBack", SnapBack.None, () -> this.page.is(Page.Rotation)));
     public final BooleanSetting look = this.add(new BooleanSetting("Look", true, () -> this.page.is(Page.Rotation)));
     public final SliderSetting rotateTime = this.add(new SliderSetting("LookTime", 0.5, 0.0, 1.0, 0.01, () -> this.page.is(Page.Rotation)));

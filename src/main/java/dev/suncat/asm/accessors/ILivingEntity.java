@@ -1,6 +1,6 @@
 /*
  * Decompiled with CFR 0.152.
- * 
+ *
  * Could not load the following classes:
  *  net.minecraft.entity.LivingEntity
  *  org.spongepowered.asm.mixin.Mixin
@@ -31,5 +31,18 @@ public interface ILivingEntity {
 
     @Accessor(value="lastLeaningPitch")
     public void setLastLeaningPitch(float var1);
+
+    // Head rotation accessors for visual rotation sync
+    @Accessor(value="headYaw")
+    public float getHeadYaw();
+
+    @Accessor(value="headYaw")
+    public void setHeadYaw(float var1);
+
+    @Accessor(value="prevHeadYaw")
+    public float getPrevHeadYaw();
+
+    @Accessor(value="prevHeadYaw")
+    public void setPrevHeadYaw(float var1);
 }
 

@@ -45,7 +45,9 @@ import dev.suncat.mod.modules.settings.impl.SliderSetting;
 import java.awt.Color;
 import java.text.DecimalFormat;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.network.PlayerListEntry;
@@ -92,6 +94,7 @@ extends Module {
     final BooleanSetting pingConfig = this.add(new BooleanSetting("Ping", true));
     final BooleanSetting healthConfig = this.add(new BooleanSetting("Health", true));
     final BooleanSetting totemsConfig = this.add(new BooleanSetting("Totems", false));
+    final BooleanSetting resistanceConfig = this.add(new BooleanSetting("Resistance", false));  // 显示神龟剩余时间
     final SliderSetting scaleConfig = this.add(new SliderSetting("Scale", 1.0, 0.0, 3.0, 0.1));
     final BooleanSetting factorConfig = this.add(new BooleanSetting("Factor", true).setParent());
     final SliderSetting scalingConfig = this.add(new SliderSetting("Scaling", 1.0, 0.0, 3.0, 0.1, this.factorConfig::isOpen));
@@ -336,6 +339,22 @@ extends Module {
             info.append(c);
             info.append(-totems);
             info.append(" ");
+        }
+        // 显示抗性提升（神龟）- Alien 风格实现
+        if (this.resistanceConfig.getValue() && player.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.RESISTANCE)) {
+            var resistanceEffect = player.getStatusEffect(net.minecraft.entity.effect.StatusEffects.RESISTANCE);
+            if (resistanceEffect != null) {
+                int ticks = resistanceEffect.getDuration();
+                int seconds = ticks / 20;
+                int amplifier = resistanceEffect.getAmplifier();
+
+                info.append(Formatting.BLUE);
+                info.append("Lv.");
+                info.append(amplifier + 1);
+                info.append(" ");
+                info.append(seconds + 1);
+                info.append("s ");
+            }
         }
         return info.toString().trim();
     }

@@ -19,6 +19,7 @@ import dev.suncat.mod.modules.settings.impl.BindSetting;
 import dev.suncat.mod.modules.settings.impl.BooleanSetting;
 import dev.suncat.mod.modules.settings.impl.ColorSetting;
 import dev.suncat.mod.modules.settings.impl.EnumSetting;
+import dev.suncat.mod.modules.settings.impl.ModuleListSetting;
 import dev.suncat.mod.modules.settings.impl.SliderSetting;
 import dev.suncat.mod.modules.settings.impl.StringSetting;
 import java.awt.Color;
@@ -70,7 +71,11 @@ extends Button {
                 s = (EnumSetting)setting;
                 newItems.add(new EnumButton((EnumSetting<?>)s));
             }
-            if (!(setting instanceof ColorSetting)) continue;
+            if (setting instanceof ModuleListSetting) {
+            s = (ModuleListSetting)setting;
+            newItems.add(new ModuleListButton((ModuleListSetting)s));
+        }
+        if (!(setting instanceof ColorSetting)) continue;
             s = (ColorSetting)setting;
             newItems.add(new PickerButton((ColorSetting)s));
         }
@@ -248,6 +253,8 @@ extends Button {
                 Item item = this.items.get(i);
                 item.setHeight(this.height);
                 double visibleH = item.getVisibleHeight();
+                // 修复：使用完整高度计算位置，避免动画期间子项重叠
+                double itemFullHeight = (double)item.getHeight();
                 if (visibleH <= 0.01 && item.isHidden()) {
                     ++i;
                     continue;
@@ -256,7 +263,7 @@ extends Button {
                 item.setWidth(this.width - 9);
                 if (setting instanceof BooleanSetting && ((BooleanSetting)setting).hasParent()) {
                     item.drawScreen(context, mouseX, mouseY, partialTicks);
-                    height += (float)(visibleH + 2.0);
+                    height += (float)(itemFullHeight + 2.0);
                     BooleanSetting parent = (BooleanSetting)setting;
                     double openProgress = this.getParentOpenProgress(parent);
                     int j = i + 1;
@@ -270,8 +277,9 @@ extends Button {
                         Item child = this.items.get(k);
                         child.setHeight(this.height);
                         double childVisibleH = child.getVisibleHeight();
+                        double childFullHeight = (double)child.getHeight();
                         if (childVisibleH <= 0.01 && child.isHidden()) continue;
-                        childrenFull += childVisibleH + 2.0;
+                        childrenFull += childFullHeight + 2.0;
                     }
                     double childrenVisible = childrenFull * openProgress;
                     if (childrenVisible > 0.01) {
@@ -290,10 +298,11 @@ extends Button {
                             Item child = this.items.get(k);
                             child.setHeight(this.height);
                             double childVisibleH = child.getVisibleHeight();
+                            double childFullH = (double)child.getHeight();
                             if (childVisibleH <= 0.01 && child.isHidden()) continue;
                             child.setLocation(childX, yOff);
                             child.setWidth(childW);
-                            if (childVisibleH < (double)child.getHeight() - 0.01) {
+                            if (childVisibleH < childFullH - 0.01) {
                                 int cX1 = (int)child.getX() - 1;
                                 int cY1 = (int)child.getY() - 1;
                                 int cX2 = (int)(child.getX() + (float)child.getWidth() + 7.0f) + 1;
@@ -310,11 +319,11 @@ extends Button {
                             } else {
                                 child.drawScreen(context, mouseX, mouseY, partialTicks);
                             }
-                            yOff += (float)(childVisibleH + 2.0);
+                            yOff += (float)(childFullH + 2.0);
                         }
                         context.disableScissor();
                     }
-                    height += (float)childrenVisible;
+                    height += (float)childrenFull * (float)openProgress;
                     i = j;
                     continue;
                 }
@@ -329,7 +338,8 @@ extends Button {
                 } else {
                     item.drawScreen(context, mouseX, mouseY, partialTicks);
                 }
-                height += (float)(visibleH + 2.0);
+                // 修复：使用完整高度累加，避免动画期间子项重叠
+                height += (float)(itemFullHeight + 2.0);
                 ++i;
             }
         }
@@ -399,11 +409,13 @@ extends Button {
             Item item = this.items.get(i);
             item.setHeight(this.height);
             double visibleH = item.getVisibleHeight();
+            // 修复：使用完整高度计算，避免动画期间高度计算错误
+            double itemFullHeight = (double)item.getHeight();
             if (visibleH <= 0.01 && item.isHidden()) {
                 ++i;
                 continue;
             }
-            height += visibleH + 2.0;
+            height += itemFullHeight + 2.0;
             if (setting instanceof BooleanSetting && ((BooleanSetting)setting).hasParent()) {
                 BooleanSetting parent = (BooleanSetting)setting;
                 double openProgress = this.getParentOpenProgress(parent);
@@ -417,9 +429,10 @@ extends Button {
                     if (!this.isVisibleWithParentOpen(parent, settings.get(k))) continue;
                     Item child = this.items.get(k);
                     child.setHeight(this.height);
+                    double childFullHeight = (double)child.getHeight();
                     double childVisibleH = child.getVisibleHeight();
                     if (childVisibleH <= 0.01 && child.isHidden()) continue;
-                    childrenFull += childVisibleH + 2.0;
+                    childrenFull += childFullHeight + 2.0;
                 }
                 height += childrenFull * openProgress;
                 i = j;

@@ -10,7 +10,9 @@ public class Animation {
 
     public double get(double target, long length, Easing ease) {
         if (target != this.to) {
-            this.from += (this.to - this.from) * this.fadeUtils.ease(ease);
+            // 修复：正确保存当前动画位置作为新的起始位置
+            double currentEase = this.fadeUtils.ease(ease);
+            this.from = this.from + (this.to - this.from) * currentEase;
             this.to = target;
             this.fadeUtils.reset();
         }

@@ -84,8 +84,9 @@ extends Module {
     private final BooleanSetting take = this.add(new BooleanSetting("Take", true));
     private final BooleanSetting smart = this.add(new BooleanSetting("Smart", true, this.take::getValue).setParent());
     private final BooleanSetting forceMove = this.add(new BooleanSetting("ForceQuickMove", true, () -> this.take.getValue() && this.smart.isOpen()));
-    private final SliderSetting takeSpeed = this.add(new SliderSetting("TakeSpeed", 1, 1, 10, 1, this.take::getValue));
-    private final SliderSetting clickDelay = this.add(new SliderSetting("ClickDelay", 50, 0, 500, 5, this.take::getValue));
+    private final SliderSetting takeSpeed = this.add(new SliderSetting("TakeSpeed", 5, 1, 10, 1, this.take::getValue));
+    private final SliderSetting clickDelay = this.add(new SliderSetting("ClickDelay", 50, 10, 500, 5, this.take::getValue));
+    private final BooleanSetting instantTake = this.add(new BooleanSetting("InstantTake", false, this.take::getValue));  // 秒补功能
     private final BindSetting placeKey = this.add(new BindSetting("PlaceKey", -1));
     private final BooleanSetting onlyGround = this.add(new BooleanSetting("OnlyGround", true));
     private final BooleanSetting onlyHotbar = this.add(new BooleanSetting("OnlyHotbar", false));
@@ -107,6 +108,8 @@ extends Module {
     private boolean placeKeyPressed = false; // Track key state to prevent double-click
 
     private boolean hasShownNoShulkerMessage = false;
+    private boolean waitingForTransfer = false;  // Wait for item transfer to complete
+    private final Timer transferTimer = new Timer();  // Timer for transfer completion
 
     public AutoRegear() {
         super("AutoRegear", Module.Category.Combat);
@@ -145,6 +148,8 @@ extends Module {
         this.clickTimer.reset();
         this.placeKeyPressed = false;
         this.hasShownNoShulkerMessage = false;
+        this.waitingForTransfer = false;
+        this.transferTimer.reset();
 
         if (AutoRegear.nullCheck()) {
             return;
@@ -344,6 +349,16 @@ extends Module {
         }
         
         if (!(AutoRegear.mc.currentScreen instanceof ShulkerBoxScreen)) {
+            // If waiting for transfer to complete, don't mine yet
+            if (this.waitingForTransfer) {
+                if (this.transferTimer.passed(1000)) {
+                    // Timeout, force stop waiting
+                    this.waitingForTransfer = false;
+                    this.takeProgress = 0;
+                }
+                return;  // Keep screen open while waiting
+            }
+
             if (this.opend) {
                 this.opend = false;
                 if (this.autoDisable.getValue()) {
@@ -414,8 +429,8 @@ extends Module {
             return;
         }
 
-        // Check click delay
-        if (!this.clickTimer.passed(this.clickDelay.getValueInt())) {
+        // Check click delay (skip if instantTake is enabled)
+        if (!this.instantTake.getValue() && !this.clickTimer.passed(this.clickDelay.getValueInt())) {
             return;
         }
 
@@ -440,7 +455,9 @@ extends Module {
 
             if (kit != null) {
                 int takesThisTick = 0;
-                int maxTakes = this.takeSpeed.getValueInt();
+                // 如果开启秒补，每 tick 拿取 36 个物品（全部）
+                // 否则使用 TakeSpeed 设置
+                int maxTakes = this.instantTake.getValue() ? 36 : this.takeSpeed.getValueInt();
 
                 // Continue from last progress position
                 for (int kitSlot = this.takeProgress; kitSlot < 36 && takesThisTick < maxTakes; kitSlot++) {
@@ -459,7 +476,7 @@ extends Module {
 
                     // Check if player has a different item in this slot
                     boolean slotOccupied = !playerStack.isEmpty();
-                    
+
                     // If ReplaceItem is enabled, we'll replace the item; otherwise skip
                     if (slotOccupied && !this.replaceItem.getValue()) {
                         this.takeProgress = kitSlot + 1;
@@ -478,7 +495,11 @@ extends Module {
                         AutoRegear.mc.interactionManager.clickSlot(shulker.syncId, slot.id, 0, SlotActionType.QUICK_MOVE, (PlayerEntity)AutoRegear.mc.player);
                         take = true;
                         takesThisTick++;
-                        this.clickTimer.reset();
+                        
+                        // 秒补模式下不重置 clickTimer，普通模式需要重置
+                        if (!this.instantTake.getValue()) {
+                            this.clickTimer.reset();
+                        }
 
                         // Now move the item from its current position to the correct kit slot
                         // After QUICK_MOVE, item goes to first available slot, we need to swap it to correct position
@@ -500,16 +521,27 @@ extends Module {
 
                 // Reset progress when done
                 if (this.takeProgress >= 36) {
-                    this.takeProgress = 0;
-                    // All items taken, mine the shulker box immediately
-                    if (this.mine.getValue() && this.openPos != null) {
-                        if (AutoRegear.mc.world.getBlockState(this.openPos).getBlock() instanceof ShulkerBoxBlock) {
-                            // 检查 BlockEntity 是否有效，防止崩端
-                            if (isValidShulkerBox(this.openPos)) {
-                                PacketMine.INSTANCE.mine(this.openPos);
+                    // Start waiting for transfer to complete
+                    if (!this.waitingForTransfer) {
+                        this.waitingForTransfer = true;
+                        this.transferTimer.reset();
+                    }
+                    // 秒补模式下等待更长时间（因为一次性转移更多物品）
+                    int waitTime = this.instantTake.getValue() ? 1500 : 1000;
+                    if (this.transferTimer.passed(waitTime)) {
+                        this.takeProgress = 0;
+                        this.waitingForTransfer = false;
+                        // All items taken, mine the shulker box
+                        if (this.mine.getValue() && this.openPos != null) {
+                            if (AutoRegear.mc.world.getBlockState(this.openPos).getBlock() instanceof ShulkerBoxBlock) {
+                                // 检查 BlockEntity 是否有效，防止崩端
+                                if (isValidShulkerBox(this.openPos)) {
+                                    PacketMine.INSTANCE.mine(this.openPos);
+                                }
                             }
                         }
                     }
+                    return;  // Don't continue taking items
                 }
             }
         }

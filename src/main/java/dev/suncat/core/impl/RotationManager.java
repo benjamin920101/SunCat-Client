@@ -473,6 +473,25 @@ implements Wrapper {
         return Vec3d.fromPolar(this.rotationPitch, this.rotationYaw);
     }
 
+    /**
+     * Grim Protocol: 发送静默旋转数据包
+     * 不修改本地视角，仅通知服务器
+     */
+    public void silentRotate(float yaw, float pitch) {
+        if (mc.player != null && mc.getNetworkHandler() != null) {
+            mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(mc.player.getX(), mc.player.getY(), mc.player.getZ(), yaw, pitch, mc.player.isOnGround()));
+        }
+    }
+
+    /**
+     * Grim Protocol: 将视角同步回玩家实际视角
+     */
+    public void silentSync() {
+        if (mc.player != null && mc.getNetworkHandler() != null) {
+            mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(mc.player.getX(), mc.player.getY(), mc.player.getZ(), mc.player.getYaw(), mc.player.getPitch(), mc.player.isOnGround()));
+        }
+    }
+
     // Simple rotation holder class
     public static class Rotation {
         public final float yaw;

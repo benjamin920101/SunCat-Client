@@ -186,6 +186,7 @@ extends Module {
     private void tweak() {
         ItemStack stack;
         int slot1;
+        ItemStack offhandStack = Sorter.mc.player.getOffHandStack();
         if (this.drop.getValue()) {
             for (slot1 = 35; slot1 >= 0; --slot1) {
                 stack = Sorter.mc.player.getInventory().getStack(slot1);
@@ -202,6 +203,7 @@ extends Module {
                 for (int slot2 = 0; slot2 < 36; ++slot2) {
                     ItemStack stack2;
                     if (slot1 == slot2 || (stack2 = Sorter.mc.player.getInventory().getStack(slot2)).getCount() == stack2.getMaxCount() || !Sorter.canMerge(stack, stack2)) continue;
+                    if (ItemStack.areItemsEqual(stack2, offhandStack)) continue;
                     Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot1, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
                     Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot2 < 9 ? slot2 + 36 : slot2, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
                     Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot1, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
@@ -231,6 +233,7 @@ extends Module {
                         String slot2Target = this.kitMap.get(slot2);
                         ItemStack stack2 = Sorter.mc.player.getInventory().getStack(slot2);
                         if (stack2.isEmpty() || (itemID = stack2.getItem().getTranslationKey()).equals(slot2Target) || !itemID.equals(target)) continue;
+                        if (ItemStack.areItemsEqual(stack2, offhandStack)) continue;
                         Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot1 < 9 ? slot1 + 36 : slot1, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
                         Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot2 < 9 ? slot2 + 36 : slot2, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
                         Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot1 < 9 ? slot1 + 36 : slot1, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
@@ -250,6 +253,7 @@ extends Module {
                         int itemID;
                         ItemStack stack3 = Sorter.mc.player.getInventory().getStack(slot2);
                         if (stack3.isEmpty() || (itemID = Item.getRawId((Item)stack3.getItem())) != minId) continue;
+                        if (ItemStack.areItemsEqual(stack3, offhandStack)) continue;
                         Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot1, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
                         Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot2, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);
                         Sorter.mc.interactionManager.clickSlot(Sorter.mc.player.playerScreenHandler.syncId, slot1, 0, SlotActionType.PICKUP, (PlayerEntity)Sorter.mc.player);

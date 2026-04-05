@@ -129,6 +129,7 @@ extends Module {
     private final BooleanSetting instant = this.add(new BooleanSetting("Instant", false, () -> this.page.is(Page.General)));
     private final BooleanSetting wait = this.add(new BooleanSetting("Wait", true, () -> !this.instant.getValue() && this.page.is(Page.General)));
     private final BooleanSetting mineAir = this.add(new BooleanSetting("MineAir", true, () -> this.wait.getValue() && !this.instant.getValue() && this.page.is(Page.General)));
+    private final EnumSetting<SwitchMode> switchMode = this.add(new EnumSetting<SwitchMode>("SwitchMode", SwitchMode.Normal, () -> this.page.is(Page.General)));
     private final BooleanSetting hotBar = this.add(new BooleanSetting("HotbarSwap", false, () -> this.page.is(Page.General)));
     private final BooleanSetting doubleBreak = this.add(new BooleanSetting("DoubleBreak", true, () -> this.page.is(Page.General))).setParent();
     public final BooleanSetting autoSwitch = this.add(new BooleanSetting("AutoSwitch", true, () -> this.page.is(Page.General) && this.doubleBreak.isOpen()));
@@ -137,7 +138,12 @@ extends Module {
     private final BooleanSetting setAir = this.add(new BooleanSetting("SetAir", false, () -> this.page.is(Page.General)));
     private final BooleanSetting swing = this.add(new BooleanSetting("Swing", true, () -> this.page.is(Page.General)));
     private final BooleanSetting endSwing = this.add(new BooleanSetting("EndSwing", false, () -> this.page.is(Page.General)));
-    private final BooleanSetting silent = this.add(new BooleanSetting("Silent", false, () -> this.page.is(Page.General)));
+    
+    // GrimV3 包挖模式设置
+    private final BooleanSetting grimV3 = this.add(new BooleanSetting("GrimV3", false, () -> this.page.is(Page.General)).setParent());
+    private final BooleanSetting grimV3MultiSwing = this.add(new BooleanSetting("MultiSwing", true, () -> this.page.is(Page.General) && this.grimV3.isOpen()));
+    private final BooleanSetting grimV3Abort = this.add(new BooleanSetting("AbortFirst", false, () -> this.page.is(Page.General) && this.grimV3.isOpen()));
+    
     public final SliderSetting range = this.add(new SliderSetting("Range", 6.0, 3.0, 10.0, 0.1, () -> this.page.is(Page.General)));
     private final EnumSetting<SwingSide> swingMode = this.add(new EnumSetting<SwingSide>("SwingSide", SwingSide.All, () -> this.page.is(Page.General)));
     private final BooleanSetting unbreakableCancel = this.add(new BooleanSetting("UnbreakableCancel", true, () -> this.page.is(Page.Check)));
@@ -151,11 +157,11 @@ extends Module {
     private final BooleanSetting smart = this.add(new BooleanSetting("Smart", true, () -> this.page.is(Page.Check) && this.checkGround.getValue()));
     private final BooleanSetting usingPause = this.add(new BooleanSetting("UsingPause", false, () -> this.page.is(Page.Check)).setParent());
     private final BooleanSetting allowOffhand = this.add(new BooleanSetting("AllowOffhand", true, () -> this.page.is(Page.Check) && this.usingPause.isOpen()));
+    private final BooleanSetting antiFeetMine = this.add(new BooleanSetting("AntiFeetMine", false, () -> this.page.is(Page.Check)));
+    private final SliderSetting antiFeetRange = this.add(new SliderSetting("AntiFeetRange", 6.0, 3.0, 10.0, 0.1, () -> this.antiFeetMine.getValue() && this.page.is(Page.Check)));
+    private final BooleanSetting antiFeetDouble = this.add(new BooleanSetting("AntiFeetDouble", false, () -> this.antiFeetMine.getValue() && this.page.is(Page.Check)));
     private final BooleanSetting bypassGround = this.add(new BooleanSetting("BypassGround", true, () -> this.page.is(Page.Check)));
     private final SliderSetting bypassTime = this.add(new SliderSetting("BypassTime", 400, 0, 2000, () -> this.bypassGround.getValue() && this.page.is(Page.Check)));
-    private final BooleanSetting antiFeetMine = this.add(new BooleanSetting("AntiFeetMine", false, () -> this.page.is(Page.Check)));
-    private final SliderSetting antiFeetRange = this.add(new SliderSetting("AntiFeetRange", 5.0, 1.0, 10.0, 0.5, () -> this.page.is(Page.Check) && this.antiFeetMine.getValue()));
-    private final BooleanSetting antiFeetDouble = this.add(new BooleanSetting("AntiFeetDouble", false, () -> this.page.is(Page.Check) && this.antiFeetMine.getValue()));
     private final BindSetting pause = this.add(new BindSetting("Pause", -1, () -> this.page.is(Page.Check)));
     private final BooleanSetting rotate = this.add(new BooleanSetting("StartRotate", true, () -> this.page.is(Page.Rotation)));
     private final BooleanSetting endRotate = this.add(new BooleanSetting("EndRotate", false, () -> this.page.is(Page.Rotation)));
@@ -204,7 +210,6 @@ extends Module {
     Vec3d directionVec = null;
     Runnable switchBack;
     BlockPos breakPos;
-    BlockPos secondBreakPos; // AntiFeetMine 第二个挖掘位置
     boolean startPacket = false;
     int breakNumber = 0;
     double breakFinalTime;
@@ -247,7 +252,6 @@ extends Module {
         ghost = false;
         complete = false;
         this.breakPos = null;
-        this.secondBreakPos = null;
         secondPos = null;
     }
 
@@ -257,15 +261,9 @@ extends Module {
         ghost = false;
         complete = false;
         this.breakPos = null;
-        this.secondBreakPos = null;
     }
 
     private void autoSwitch() {
-        // Silent 模式下禁用自动切换
-        if (this.silent.getValue()) {
-            return;
-        }
-        
         if (this.autoSwitch.getValue() && this.doubleBreak.getValue()) {
             int index = -1;
             if (secondPos != null) {
@@ -281,12 +279,20 @@ extends Module {
             }
             if (index == -1 || PacketMine.mc.options.useKey.isPressed() || PacketMine.mc.options.attackKey.isPressed() || PacketMine.mc.player.isUsingItem() || !this.secondTimer.passedMs(this.getBreakTime(secondPos, index, this.start.getValue()))) {
                 if (this.swapped) {
-                    InventoryUtil.switchToSlot(this.mainSlot);
+                    if (this.switchMode.is(SwitchMode.Silent)) {
+                        mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(this.mainSlot));
+                    } else {
+                        InventoryUtil.switchToSlot(this.mainSlot);
+                    }
                     this.swapped = false;
                 }
             } else if (index != PacketMine.mc.player.getInventory().selectedSlot) {
                 this.mainSlot = PacketMine.mc.player.getInventory().selectedSlot;
-                InventoryUtil.switchToSlot(index);
+                if (this.switchMode.is(SwitchMode.Silent)) {
+                    mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(index));
+                } else {
+                    InventoryUtil.switchToSlot(index);
+                }
                 this.swapped = true;
             }
         }
@@ -412,7 +418,7 @@ extends Module {
                         int oldSlot = PacketMine.mc.player.getInventory().selectedSlot;
                         this.doSwap(eChest, eChest);
                         BlockUtil.placeBlock(this.breakPos, this.placeRotate.getValue(), true);
-                        this.doSwap(oldSlot, eChest);
+                        this.doSwapBack(oldSlot, eChest);
                         this.placeTimer.reset();
                     }
                 } else if (this.obsidian.isPressed() && (obsidian = this.findBlock(Blocks.OBSIDIAN)) != -1) {
@@ -428,7 +434,7 @@ extends Module {
                         int oldSlot = PacketMine.mc.player.getInventory().selectedSlot;
                         this.doSwap(obsidian, obsidian);
                         BlockUtil.placeBlock(this.breakPos, this.placeRotate.getValue(), true);
-                        this.doSwap(oldSlot, obsidian);
+                        this.doSwapBack(oldSlot, obsidian);
                         this.placeTimer.reset();
                     }
                 }
@@ -469,7 +475,9 @@ extends Module {
                     boolean bl = shouldSwitch = old + 36 != slot;
                 }
                 if (shouldSwitch) {
-                    if (this.hotBar.getValue()) {
+                    if (this.switchMode.is(SwitchMode.Silent)) {
+                        mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot < 9 ? slot : slot - 36));
+                    } else if (this.hotBar.getValue()) {
                         InventoryUtil.switchToSlot(slot);
                     } else {
                         PacketMine.mc.interactionManager.clickSlot(PacketMine.mc.player.currentScreenHandler.syncId, slot, old, SlotActionType.SWAP, (PlayerEntity)PacketMine.mc.player);
@@ -479,7 +487,9 @@ extends Module {
                 this.switchBack = () -> {
                     if (this.endRotate.getValue() && !this.faceVector(this.breakPos.toCenterPos().offset(BlockUtil.getClickSide(this.breakPos), 0.5))) {
                         if (shouldSwitch) {
-                            if (this.hotBar.getValue()) {
+                            if (this.switchMode.is(SwitchMode.Silent)) {
+                                mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(old));
+                            } else if (this.hotBar.getValue()) {
                                 InventoryUtil.switchToSlot(old);
                             } else {
                                 PacketMine.mc.interactionManager.clickSlot(PacketMine.mc.player.currentScreenHandler.syncId, finalSlot, old, SlotActionType.SWAP, (PlayerEntity)PacketMine.mc.player);
@@ -489,11 +499,13 @@ extends Module {
                         return;
                     }
                     PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, this.breakPos, BlockUtil.getClickSide(this.breakPos), id));
-                    if (this.endSwing.getValue() && !this.silent.getValue()) {
+                    if (this.endSwing.getValue()) {
                         EntityUtil.swingHand(Hand.MAIN_HAND, this.swingMode.getValue());
                     }
                     if (shouldSwitch) {
-                        if (this.hotBar.getValue()) {
+                        if (this.switchMode.is(SwitchMode.Silent)) {
+                            mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(old));
+                        } else if (this.hotBar.getValue()) {
                             InventoryUtil.switchToSlot(old);
                         } else {
                             PacketMine.mc.interactionManager.clickSlot(PacketMine.mc.player.currentScreenHandler.syncId, finalSlot, old, SlotActionType.SWAP, (PlayerEntity)PacketMine.mc.player);
@@ -537,7 +549,7 @@ extends Module {
             }
             this.mineTimer.reset();
             this.animationTime.reset();
-            if (this.swing.getValue() && !this.silent.getValue()) {
+            if (this.swing.getValue()) {
                 EntityUtil.swingHand(Hand.MAIN_HAND, this.swingMode.getValue());
             }
             if (this.doubleBreak.getValue()) {
@@ -550,7 +562,14 @@ extends Module {
                 }
                 this.doDoubleBreak(side);
             }
-            PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, this.breakPos, side, id));
+            
+            // GrimV3 模式使用特殊的发包序列
+            if (this.grimV3.getValue()) {
+                this.doGrimV3Break(side);
+            } else {
+                PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, this.breakPos, side, id));
+            }
+            
             if (this.rotate.getValue() && !this.shouldYawStep()) {
                 suncat.ROTATION.snapBack();
             }
@@ -567,13 +586,45 @@ extends Module {
         PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, this.breakPos, side, id));
     }
 
+    /**
+     * GrimV3 模式发包逻辑 (来自 Shoreline)
+     * 发包序列：STOP -> START -> ABORT + 多次甩手
+     */
+    void doGrimV3Break(Direction side) {
+        if (this.grimV3Abort.getValue()) {
+            // AbortFirst 模式：先发送 ABORT 重置状态
+            PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK, this.breakPos, side, id));
+        }
+        
+        // GrimV3 标准发包序列
+        PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, this.breakPos, side, id));
+        PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, this.breakPos, side, id));
+        PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK, this.breakPos, side, id));
+        
+        // 多次甩手 (Shoreline 特征)
+        if (this.grimV3MultiSwing.getValue()) {
+            PacketMine.sendSequencedPacket(id -> {
+                EntityUtil.swingHand(Hand.MAIN_HAND, this.swingMode.getValue());
+                return null;
+            });
+            PacketMine.sendSequencedPacket(id -> {
+                EntityUtil.swingHand(Hand.MAIN_HAND, this.swingMode.getValue());
+                return null;
+            });
+            PacketMine.sendSequencedPacket(id -> {
+                EntityUtil.swingHand(Hand.MAIN_HAND, this.swingMode.getValue());
+                return null;
+            });
+        }
+    }
+
     boolean placeCrystal() {
         int crystal = this.findCrystal();
         if (crystal != -1) {
             int oldSlot = PacketMine.mc.player.getInventory().selectedSlot;
             this.doSwap(crystal, crystal);
             BlockUtil.placeCrystal(this.breakPos.up(), this.placeRotate.getValue());
-            this.doSwap(oldSlot, crystal);
+            this.doSwapBack(oldSlot, crystal);
             this.placeTimer.reset();
             return !this.waitPlace.getValue();
         }
@@ -619,16 +670,7 @@ extends Module {
         if (Blink.INSTANCE.isOn() && Blink.INSTANCE.pauseModule.getValue()) {
             return;
         }
-
-        // AntiFeetMine: 检测对手下半身是否在基岩，如果是则挖脸旁边的方块
-        Direction side = this.getSmartClickSide(this.breakPos);
-        
-        // 如果有第二个挖掘位置，同时挖掘
-        if (this.secondBreakPos != null && this.antiFeetDouble.getValue()) {
-            Direction secondSide = BlockUtil.getClickSide(this.secondBreakPos);
-            PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, this.secondBreakPos, secondSide, id));
-        }
-        
+        Direction side = BlockUtil.getClickSide(this.breakPos);
         if (this.rotate.getValue()) {
             Vec3i vec3i = side.getVector();
             if (!this.faceVector(this.breakPos.toCenterPos().add(new Vec3d((double)vec3i.getX() * 0.5, (double)vec3i.getY() * 0.5, (double)vec3i.getZ() * 0.5)))) {
@@ -638,7 +680,7 @@ extends Module {
         if (!this.startTime.passed(this.startDelay.getValueInt())) {
             return;
         }
-        if (this.swing.getValue() && !this.silent.getValue()) {
+        if (this.swing.getValue()) {
             EntityUtil.swingHand(Hand.MAIN_HAND, this.swingMode.getValue());
         }
         if (this.doubleBreak.getValue()) {
@@ -659,7 +701,14 @@ extends Module {
             slot = PacketMine.mc.player.getInventory().selectedSlot;
         }
         this.breakFinalTime = this.getBreakTime(this.breakPos, slot);
-        PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, this.breakPos, side, id));
+        
+        // GrimV3 模式使用特殊的发包序列
+        if (this.grimV3.getValue()) {
+            this.doGrimV3Break(side);
+        } else {
+            PacketMine.sendSequencedPacket(id -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, this.breakPos, side, id));
+        }
+        
         if (this.rotate.getValue() && !this.shouldYawStep()) {
             suncat.ROTATION.snapBack();
         }
@@ -690,9 +739,13 @@ extends Module {
         if (this.breakPos != null && this.preferHead.getValue() && PacketMine.mc.player.isCrawling() && EntityUtil.getPlayerPos(true).up().equals((Object)this.breakPos)) {
             return;
         }
-        if (BlockUtil.getClickSideStrict(pos) == null) {
+        
+        // AntiFeetMine 逻辑：检测敌人下半身是否在基岩中
+        Direction clickSide = getAntiFeetClickSide(pos);
+        if (clickSide == null) {
             return;
         }
+        
         if ((double)MathHelper.sqrt((float)((float)PacketMine.mc.player.getEyePos().squaredDistanceTo(pos.toCenterPos()))) > this.range.getValue()) {
             return;
         }
@@ -703,14 +756,63 @@ extends Module {
         complete = false;
         this.mineTimer.reset();
         this.animationTime.reset();
-        
-        // AntiFeetMine: 检测玩家下半身是否在基岩，如果是则挖脸不挖脚
-        if (this.antiFeetMine.getValue()) {
-            Direction feetSide = this.getSmartClickSide(pos);
-            if (feetSide != null) {
-                PacketMine.mc.interactionManager.attackBlock(pos, feetSide);
+    }
+
+    /**
+     * AntiFeetMine: 检测敌人下半身是否在基岩中，如果是则返回侧面的挖掘方向
+     */
+    private Direction getAntiFeetClickSide(BlockPos pos) {
+        if (!this.antiFeetMine.getValue()) {
+            return BlockUtil.getClickSideStrict(pos);
+        }
+
+        // 检查范围内是否有敌人
+        double rangeSq = this.antiFeetRange.getValue() * this.antiFeetRange.getValue();
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || player.isDead() || player.isSpectator()) continue;
+
+            double dist = mc.player.squaredDistanceTo(player);
+            if (dist > rangeSq) continue;
+
+            // 获取玩家下半身位置的方块
+            BlockPos entityFeetPos = new BlockPos((int)player.getX(), (int)player.getY(), (int)player.getZ());
+            BlockPos entityHeadPos = entityFeetPos.up();
+
+            // 检查玩家下半身是否在基岩里
+            boolean isFeetInBedrock = mc.world.getBlockState(entityFeetPos).getBlock() == Blocks.BEDROCK;
+
+            // 如果下半身在基岩里，禁止挖掘脚部位置
+            if (isFeetInBedrock) {
+                // 如果当前挖掘位置是玩家脚部位置，返回 null（不挖脚）
+                if (pos.equals(entityFeetPos)) {
+                    return null;
+                }
+
+                // 如果当前挖掘位置是玩家头部位置，返回侧面的挖掘方向
+                if (pos.equals(entityHeadPos)) {
+                    // 获取玩家朝向
+                    Direction facing = player.getHorizontalFacing();
+                    if (facing != null) {
+                        // 脸旁边的方块（侧面）
+                        Direction sideFacing = facing.rotateYClockwise();
+                        return sideFacing.getOpposite();
+                    }
+                }
+
+                // 如果开启双挖掘，设置第二个挖掘位置为脸前面
+                Direction facing = player.getHorizontalFacing();
+                if (facing != null && this.antiFeetDouble.getValue()) {
+                    BlockPos frontPos = entityHeadPos.offset(facing);
+                    if (pos.equals(frontPos)) {
+                        secondPos = frontPos;
+                        return BlockUtil.getClickSide(pos);
+                    }
+                }
             }
         }
+
+        // 正常情况，使用默认的点击面
+        return BlockUtil.getClickSideStrict(pos);
     }
 
     boolean faceVector(Vec3d directionVec) {
@@ -903,7 +1005,21 @@ extends Module {
     }
 
     void doSwap(int slot, int inv) {
-        if (!this.inventory.getValue()) {
+        if (this.switchMode.is(SwitchMode.Silent)) {
+            // Silent 模式：只发包，不修改客户端视角
+            mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+        } else if (!this.inventory.getValue()) {
+            InventoryUtil.switchToSlot(slot);
+        } else {
+            InventoryUtil.inventorySwap(inv, PacketMine.mc.player.getInventory().selectedSlot);
+        }
+    }
+
+    void doSwapBack(int slot, int inv) {
+        if (this.switchMode.is(SwitchMode.Silent)) {
+            // Silent 模式：发包切换回原槽位
+            mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+        } else if (!this.inventory.getValue()) {
             InventoryUtil.switchToSlot(slot);
         } else {
             InventoryUtil.inventorySwap(inv, PacketMine.mc.player.getInventory().selectedSlot);
@@ -1015,11 +1131,6 @@ extends Module {
     }
 
     int getTool(BlockPos pos) {
-        // Silent 模式下不切换工具，直接返回当前槽位
-        if (this.silent.getValue()) {
-            return PacketMine.mc.player.getInventory().selectedSlot;
-        }
-
         if (this.hotBar.getValue()) {
             int index = -1;
             float CurrentFastest = 1.0f;
@@ -1044,73 +1155,6 @@ extends Module {
             slot.set(entry.getKey());
         }
         return slot.get();
-    }
-
-    /**
-     * AntiFeetMine: 智能获取挖掘面
-     * 检测范围内玩家下半身是否在基岩里，如果是则挖掘他脸旁边的方块
-     * 支持同时挖掘两个方块（脸旁边 + 脸前面）
-     */
-    private Direction getSmartClickSide(BlockPos pos) {
-        if (!this.antiFeetMine.getValue()) {
-            return BlockUtil.getClickSide(pos);
-        }
-        
-        this.secondBreakPos = null; // 重置第二个挖掘位置
-        
-        // 检测范围内是否有玩家下半身在基岩里
-        for (Entity entity : PacketMine.mc.world.getEntities()) {
-            if (!(entity instanceof PlayerEntity)) continue;
-            PlayerEntity player = (PlayerEntity)entity;
-            if (player == PacketMine.mc.player) continue;
-            if (player.isDead() || player.isSpectator()) continue;
-            
-            // 检查距离
-            double dist = PacketMine.mc.player.squaredDistanceTo(player);
-            if (dist > this.antiFeetRange.getValue() * this.antiFeetRange.getValue()) continue;
-            
-            // 获取玩家下半身位置的方块
-            BlockPos entityFeetPos = new BlockPos((int)player.getX(), (int)player.getY(), (int)player.getZ());
-            BlockPos entityHeadPos = entityFeetPos.up();
-            
-            // 检查玩家下半身是否在基岩里
-            boolean isFeetInBedrock = PacketMine.mc.world.getBlockState(entityFeetPos).getBlock() == Blocks.BEDROCK;
-            
-            // 如果下半身在基岩里，挖掘脸旁边的方块
-            if (isFeetInBedrock) {
-                // 获取玩家朝向
-                Direction facing = player.getHorizontalFacing();
-                if (facing == null) continue;
-                
-                // 获取玩家头部位置
-                BlockPos headPos = entityFeetPos.up();
-                
-                // 脸旁边的方块（侧面）
-                Direction sideFacing = facing.rotateYClockwise();
-                BlockPos sidePos = headPos.offset(sideFacing);
-                
-                // 脸前面的方块
-                BlockPos frontPos = headPos.offset(facing);
-                
-                // 设置第二个挖掘位置（如果开启双挖掘）
-                if (this.antiFeetDouble.getValue()) {
-                    this.secondBreakPos = frontPos;
-                }
-                
-                // 如果当前挖掘位置是脸旁边或脸前面，返回正确挖掘面
-                if (pos.equals((Object)sidePos) || pos.equals((Object)frontPos)) {
-                    return BlockUtil.getClickSide(pos);
-                }
-                
-                // 如果当前挖掘位置是玩家头部位置，切换到脸旁边
-                if (pos.equals((Object)headPos)) {
-                    return sideFacing.getOpposite();
-                }
-            }
-        }
-        
-        // 否则返回正常挖掘面
-        return BlockUtil.getClickSide(pos);
     }
 
     private boolean shouldYawStep() {
@@ -1152,6 +1196,12 @@ extends Module {
         Oscillation,
         None;
 
+    }
+
+    public static enum SwitchMode {
+        Normal,
+        Silent,
+        Inventory;
     }
 }
 

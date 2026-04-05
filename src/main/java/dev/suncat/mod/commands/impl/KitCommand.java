@@ -2,7 +2,6 @@ package dev.suncat.mod.commands.impl;
 
 import dev.suncat.core.impl.KitManager;
 import dev.suncat.mod.modules.impl.combat.AutoRegear;
-import dev.suncat.mod.modules.impl.player.ShiftKitSort;
 import dev.suncat.mod.commands.Command;
 
 import java.io.File;
@@ -38,10 +37,6 @@ public class KitCommand extends Command {
                     if (AutoRegear.INSTANCE != null) {
                         AutoRegear.INSTANCE.currentKitName = parameters[1];
                     }
-                    // Set the loaded kit name to ShiftKitSort
-                    if (ShiftKitSort.INSTANCE != null) {
-                        ShiftKitSort.INSTANCE.currentKitName = parameters[1];
-                    }
                     this.sendChatMessage("§a[Kit] §7已加载 Kit: §f" + parameters[1]);
                 } else {
                     this.sendUsage();
@@ -53,12 +48,15 @@ public class KitCommand extends Command {
                     this.sendChatMessage("§c[Kit] §7没有找到任何 Kit");
                     return;
                 }
+                File[] files = kitsDir.listFiles();
                 boolean found = false;
-                for (File file : kitsDir.listFiles()) {
-                    if (!file.getName().endsWith(".json")) continue;
-                    String name = file.getName().replace(".json", "");
-                    this.sendChatMessage("§a[Kit] §7找到 Kit: §f" + name);
-                    found = true;
+                if (files != null) {
+                    for (File file : files) {
+                        if (!file.getName().endsWith(".json")) continue;
+                        String name = file.getName().replace(".json", "");
+                        this.sendChatMessage("§a[Kit] §7找到 Kit: §f" + name);
+                        found = true;
+                    }
                 }
                 if (!found) {
                     this.sendChatMessage("§c[Kit] §7没有找到任何 Kit");
@@ -85,7 +83,7 @@ public class KitCommand extends Command {
     @Override
     public String[] getAutocorrect(int count, List<String> seperated) {
         if (count == 1) {
-            String input = seperated.getLast().toLowerCase();
+            String input = seperated.get(seperated.size() - 1).toLowerCase();
             ArrayList<String> correct = new ArrayList<>();
             List<String> list = List.of("save", "load", "list", "delete");
             for (String x : list) {

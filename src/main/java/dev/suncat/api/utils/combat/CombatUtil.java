@@ -48,10 +48,28 @@ implements Wrapper {
 
     public static List<PlayerEntity> getEnemies(double range) {
         ArrayList<PlayerEntity> list = new ArrayList<PlayerEntity>();
+        ArrayList<PlayerEntity> enemyListPlayers = new ArrayList<PlayerEntity>();
+
+        // 收集所有有效玩家
         for (AbstractClientPlayerEntity player : suncat.THREAD.getPlayers()) {
             if (!CombatUtil.isValid((Entity)player, range)) continue;
             list.add((PlayerEntity)player);
         }
+
+        // 如果 EnemyList 开启，将敌人列表中的玩家排在前面
+        if (dev.suncat.mod.modules.impl.combat.EnemyList.INSTANCE != null && dev.suncat.mod.modules.impl.combat.EnemyList.INSTANCE.isOn()) {
+            // 分离敌人列表中的玩家和其他玩家
+            for (PlayerEntity player : new ArrayList<PlayerEntity>(list)) {
+                if (dev.suncat.mod.modules.impl.combat.EnemyList.INSTANCE.isEnemy(player)) {
+                    enemyListPlayers.add(player);
+                    list.remove(player);
+                }
+            }
+            // 将敌人列表中的玩家添加到列表开头
+            enemyListPlayers.addAll(list);
+            return enemyListPlayers;
+        }
+
         return list;
     }
 
@@ -100,13 +118,13 @@ implements Wrapper {
 
     public static boolean isValid(Entity entity, double range) {
         PlayerEntity player;
-        boolean invalid = entity == null || !entity.isAlive() || entity.equals((Object)CombatUtil.mc.player) || entity instanceof PlayerEntity && suncat.FRIEND.isFriend(player = (PlayerEntity)entity) || CombatUtil.mc.player.getPos().distanceTo(entity.getPos()) > range;
+        boolean invalid = entity == null || !entity.isAlive() || entity.equals((Object)CombatUtil.mc.player) || entity instanceof PlayerEntity && (suncat.FRIEND.isFriend(player = (PlayerEntity)entity)) || CombatUtil.mc.player.getPos().distanceTo(entity.getPos()) > range;
         return !invalid;
     }
 
     public static boolean isValid(Entity entity) {
         PlayerEntity player;
-        boolean invalid = entity == null || !entity.isAlive() || entity.equals((Object)CombatUtil.mc.player) || entity instanceof PlayerEntity && suncat.FRIEND.isFriend(player = (PlayerEntity)entity);
+        boolean invalid = entity == null || !entity.isAlive() || entity.equals((Object)CombatUtil.mc.player) || entity instanceof PlayerEntity && (suncat.FRIEND.isFriend(player = (PlayerEntity)entity));
         return !invalid;
     }
 

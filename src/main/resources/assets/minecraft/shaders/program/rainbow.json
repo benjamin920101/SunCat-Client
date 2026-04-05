@@ -4,7 +4,7 @@
     "srcrgb": "srcalpha",
     "dstrgb": "1-srcalpha"
   },
-  "vertex": "sobel",
+  "vertex": "rainbow",
   "fragment": "rainbow",
   "attributes": [
     "Position"

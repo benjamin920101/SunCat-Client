@@ -4,7 +4,7 @@
     "srcrgb": "srcalpha",
     "dstrgb": "1-srcalpha"
   },
-  "vertex": "blit",
+  "vertex": "blurarea",
   "fragment": "blurarea",
   "attributes": [ "Position" ],
   "samplers": [ { "name": "DiffuseSampler" } ],

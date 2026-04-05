@@ -1,10 +1,15 @@
 package dev.suncat.mod.modules.impl.movement;
 
 import dev.suncat.api.events.eventbus.EventListener;
-import dev.suncat.api.events.impl.*;
+import dev.suncat.api.events.impl.JumpEvent;
+import dev.suncat.api.events.impl.MoveEvent;
+import dev.suncat.api.events.impl.TravelEvent;
+import dev.suncat.api.events.impl.UpdateEvent;
 import dev.suncat.api.utils.player.InventoryUtil;
 import dev.suncat.api.utils.player.MovementUtil;
+import dev.suncat.api.utils.player.PlayerUtils;
 import dev.suncat.api.utils.math.Timer;
+import dev.suncat.core.impl.RotationManager;
 import dev.suncat.mod.modules.Module;
 import dev.suncat.mod.modules.impl.player.MiddleClick;
 import dev.suncat.mod.modules.settings.impl.BooleanSetting;
@@ -15,24 +20,33 @@ import net.minecraft.item.ElytraItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.MathHelper;
 
+/**
+ * EFly - 从 Sn0w 客户端完整移植的 Flight 模块
+ * 包含 Creative 和 Grim 两种飞行模式
+ * 独立实现，不依赖 SunCat 的 mixin
+ */
 public class EFly extends Module {
     public static EFly INSTANCE;
 
-    // Settings
+    // 模式选择
     public final EnumSetting<Mode> mode = this.add(new EnumSetting<>("Mode", Mode.Creative));
+
+    // Creative 模式设置
     private final SliderSetting horizontalSpeed = this.add(new SliderSetting("Horizontal", 3.0, 1.0, 5.0, 0.1, () -> this.mode.is(Mode.Creative)));
     private final SliderSetting verticalSpeed = this.add(new SliderSetting("Vertical", 3.0, 1.0, 5.0, 0.1, () -> this.mode.is(Mode.Creative)));
     private final BooleanSetting antiKick = this.add(new BooleanSetting("AntiKick", false, () -> this.mode.is(Mode.Creative)));
-    private final BooleanSetting pitch = this.add(new BooleanSetting("Pitch", false, () -> this.mode.is(Mode.Grim)));
-    private final BooleanSetting firework = this.add(new BooleanSetting("Firework", false, () -> this.mode.is(Mode.Grim)));
+
+    // Grim 模式设置
+    public final BooleanSetting pitch = this.add(new BooleanSetting("Pitch", false, () -> this.mode.is(Mode.Grim)));
+    public final BooleanSetting firework = this.add(new BooleanSetting("Firework", false, () -> this.mode.is(Mode.Grim)));
 
     // Timers
     private final Timer antiKickTimer = new Timer();
     private final Timer fireworkDelayTimer = new Timer();
+
+    // Grim air friction constant (from Sn0w - 精确调谐值)
+    private static final float GRIM_AIR_FRICTION = 0.0264444413f;
 
     public EFly() {
         super("EFly", Category.Movement);
@@ -58,6 +72,7 @@ public class EFly extends Module {
 
     @Override
     public void onDisable() {
+        // Grim 模式关闭时停止飞行
         if (this.mode.is(Mode.Grim) && !Module.nullCheck() && mc.player != null && mc.player.isFallFlying()) {
             mc.player.stopFallFlying();
         }
@@ -69,18 +84,11 @@ public class EFly extends Module {
             return;
         }
 
+        // Grim 模式：每 tick 设置旋转方向（实现站着飞和按键转向）
         if (this.mode.is(Mode.Grim)) {
-            // Only set pitch for Grim mode, yaw is handled by movement input
-            if (this.pitch.getValue()) {
-                mc.player.setPitch(getControlPitch());
-            }
-            
-            // Override onGround status for Grim anti-cheat
-            // This prevents Grim from detecting us as "standing" when flying
-            if (mc.player.isFallFlying() && !mc.player.isOnGround()) {
-                // Force onGround to false while flying
-                mc.player.setOnGround(false);
-            }
+            float moveYaw = getMoveYaw();
+            float controlPitch = getControlPitch();
+            RotationManager.INSTANCE.snapAt(moveYaw, controlPitch);
         }
     }
 
@@ -117,19 +125,19 @@ public class EFly extends Module {
             return;
         }
 
+        // Grim 模式取消原版跳跃
         if (this.mode.is(Mode.Grim)) {
             event.setCancelled(true);
         }
     }
 
+    /**
+     * Creative 模式移动处理
+     */
     private void handleCreativeMode(MoveEvent event) {
-        if (!mc.player.isFallFlying()) {
-            return;
-        }
-
         event.setY(0.0);
 
-        // Anti-kick logic
+        // Anti-kick 逻辑
         if (this.antiKick.getValue() && this.antiKickTimer.passed(3800L)) {
             event.setY(-0.04);
             this.antiKickTimer.reset();
@@ -141,7 +149,7 @@ public class EFly extends Module {
             }
         }
 
-        // Horizontal movement
+        // 水平移动
         float speed = this.horizontalSpeed.getValueFloat();
         float forward = mc.player.input.movementForward;
         float strafe = mc.player.input.movementSideways;
@@ -159,29 +167,40 @@ public class EFly extends Module {
         event.setZ((forward * speed * rz) - (strafe * speed * rx));
     }
 
+    /**
+     * Grim 模式移动处理
+     * Sn0w 原版：无条件调用 doBoost，不检查 isFallFlying()
+     */
     private void handleGrimMove(MoveEvent event) {
-        if (!mc.player.isFallFlying()) {
-            return;
-        }
+        // 使用 EFly 自己的 doBoost 逻辑（使用 getMoveYaw 保证旋转一致性）
+        applyGrimBoost(event);
+    }
 
-        // Grim mode acceleration
-        float yaw = mc.player.getYaw();
-        final double GRIM_AIR_FRICTION = 0.0264444413;
+    /**
+     * Grim 模式加速应用（Sn0w 风格）
+     * 使用 getMoveYaw() 而非 mc.player.getYaw()，确保与 RotationManager 一致
+     */
+    private void applyGrimBoost(MoveEvent event) {
+        float yaw = getMoveYaw();
         final double x = GRIM_AIR_FRICTION * Math.cos(Math.toRadians(yaw + 90.0f));
         final double z = GRIM_AIR_FRICTION * Math.sin(Math.toRadians(yaw + 90.0f));
         event.setX(event.getX() + x);
         event.setZ(event.getZ() + z);
     }
 
+    /**
+     * Grim 模式移动事件处理
+     */
     private void handleGrimTravel(TravelEvent event) {
-        // Find elytra in inventory
+        // 查找背包中的鞘翅
         int slot = InventoryUtil.findItemInventorySlot(Items.ELYTRA);
 
+        // 如果没有鞘翅且没装备，直接返回
         if (!isElytraEquipped() && slot == -1) {
             return;
         }
 
-        // Cancel movement if not moving
+        // 如果没在移动且没按跳跃/潜行，取消移动
         if (!MovementUtil.isMoving() &&
             !(mc.options.jumpKey.isPressed() && !mc.options.sneakKey.isPressed()) &&
             !(mc.options.sneakKey.isPressed() && !mc.options.jumpKey.isPressed())) {
@@ -189,158 +208,136 @@ public class EFly extends Module {
             return;
         }
 
-        // Start elytra flight
+        // 如果不在飞行状态，自动启动
         if (!mc.player.isFallFlying()) {
             boolean swapBack = false;
 
+            // 如果没装备鞘翅，先装备
             if (!isElytraEquipped()) {
-                swapArmor(2, slot);
+                InventoryUtil.swapArmor(2, slot);
                 swapBack = true;
             }
 
-            // Start flying
+            // 发送飞行数据包
             mc.getNetworkHandler().sendPacket(
                 new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
             mc.player.startFallFlying();
 
-            // Use firework for boosting
+            // 使用烟花加速
             if (this.firework.getValue()) {
-                if (!isBoostedByFirework() && this.fireworkDelayTimer.passed(400L) && !mc.player.isOnGround()) {
-                    doFirework(slot);
+                if (!PlayerUtils.isBoostedByFirework() && this.fireworkDelayTimer.passed(400L) && !mc.player.isOnGround()) {
+                    PlayerUtils.doFirework();
                     this.fireworkDelayTimer.reset();
                 }
             }
 
-            // MiddleClick firework schedule support
+            // MiddleClick 烟花支持
             if (MiddleClick.INSTANCE.fireworkSchedule) {
                 MiddleClick.INSTANCE.doFirework();
                 MiddleClick.INSTANCE.fireworkSchedule = false;
             }
 
+            // 如果需要，换回鞘翅
             if (swapBack) {
-                swapArmor(2, slot);
+                InventoryUtil.swapArmor(2, slot);
             }
         }
 
-        // Jump on ground
+        // 在地面上时自动跳跃
         if (mc.player.isOnGround()) {
-            mc.player.jump();
+            PlayerUtils.clientJump();
         }
     }
 
+    /**
+     * 获取移动朝向（Sn0w 风格 - 使用按键状态）
+     * 按 A 头往左 90 度，按 D 头往右 90 度，实现站着飞
+     */
+    private float getMoveYaw() {
+        float yaw = mc.player.getYaw();
+
+        boolean forward = mc.options.forwardKey.isPressed();
+        boolean back = mc.options.backKey.isPressed();
+        boolean left = mc.options.leftKey.isPressed();
+        boolean right = mc.options.rightKey.isPressed();
+
+        if (forward && !back) {
+            if (left && !right) {
+                return net.minecraft.util.math.MathHelper.wrapDegrees(yaw - 45.0f);
+            } else if (right && !left) {
+                return net.minecraft.util.math.MathHelper.wrapDegrees(yaw + 45.0f);
+            }
+            return yaw;
+        } else if (back && !forward) {
+            yaw = net.minecraft.util.math.MathHelper.wrapDegrees(yaw + 180.0f);
+            if (left && !right) {
+                return net.minecraft.util.math.MathHelper.wrapDegrees(yaw - 45.0f);
+            } else if (right && !left) {
+                return net.minecraft.util.math.MathHelper.wrapDegrees(yaw + 45.0f);
+            }
+            return yaw;
+        } else if (left && !right) {
+            return net.minecraft.util.math.MathHelper.wrapDegrees(yaw - 90.0f);
+        } else if (right && !left) {
+            return net.minecraft.util.math.MathHelper.wrapDegrees(yaw + 90.0f);
+        }
+
+        // 没有按键时保持当前朝向（站着飞）
+        return yaw;
+    }
+
+    /**
+     * 获取控制俯仰角
+     * 根据跳跃/潜行键调整 pitch，实现上下飞行控制
+     */
+    private float getControlPitch() {
+        if (PlayerUtils.isBoostedByFirework()) {
+            // 有烟花加速时
+            if (mc.options.jumpKey.isPressed() && !mc.options.sneakKey.isPressed()) {
+                // 按跳跃键 - 抬头向上飞
+                if (MovementUtil.isMoving()) {
+                    return -50f;  // 移动时抬头 -50 度
+                } else {
+                    return -90.0f;  // 站着时抬头 -90 度（垂直向上）
+                }
+            } else if (mc.options.sneakKey.isPressed() && !mc.options.jumpKey.isPressed()) {
+                // 按潜行键 - 低头向下飞
+                if (MovementUtil.isMoving()) {
+                    return 50f;  // 移动时低头 50 度
+                } else {
+                    return 90.0f;  // 站着时低头 90 度（垂直向下）
+                }
+            } else {
+                return 0.0f;  // 没有输入时保持水平
+            }
+        } else {
+            // 没有烟花加速时
+            if (mc.options.jumpKey.isPressed() && !mc.options.sneakKey.isPressed()) {
+                return -50f;  // 按跳跃键抬头 -50 度
+            } else if (mc.options.sneakKey.isPressed() && !mc.options.jumpKey.isPressed()) {
+                return 50f;  // 按潜行键低头 50 度
+            } else {
+                return 0.1f;  // 没有输入时保持水平（微小角度防止检测）
+            }
+        }
+    }
+
+    /**
+     * 检查是否装备鞘翅
+     */
     private boolean isElytraEquipped() {
         ItemStack chestStack = mc.player.getEquippedStack(EquipmentSlot.CHEST);
         return chestStack.getItem() instanceof ElytraItem;
     }
 
-    private boolean isBoostedByFirework() {
-        return !mc.player.getAbilities().flying && !mc.player.isOnGround();
-    }
-
-    private void doFirework(int elytraSlot) {
-        int fireworkSlot = InventoryUtil.findItemInventorySlot(Items.FIREWORK_ROCKET);
-        if (fireworkSlot == -1) {
-            return;
-        }
-
-        int oldSlot = mc.player.getInventory().selectedSlot;
-
-        // Swap to elytra if needed
-        boolean swappedElytra = false;
-        if (!isElytraEquipped()) {
-            swapArmor(2, elytraSlot);
-            swappedElytra = true;
-        }
-
-        // Use firework
-        InventoryUtil.switchToSlot(fireworkSlot);
-        mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
-
-        // Swap back
-        InventoryUtil.switchToSlot(oldSlot);
-
-        if (swappedElytra) {
-            swapArmor(2, elytraSlot);
-        }
-    }
-
-    private void swapArmor(int armorSlot, int inSlot) {
-        int slot = inSlot;
-        if (slot < 9) {
-            slot += 36;
-        }
-
-        // Use inventory handler directly for player inventory
-        int syncId = mc.player.currentScreenHandler.syncId;
-        int armorSlotId = 8 - armorSlot; // Armor slot in inventory screen (5=feet, 6=legs, 7=chest, 8=head)
-
-        // Pick up item from inventory slot
-        mc.interactionManager.clickSlot(syncId, slot, 0, SlotActionType.PICKUP, mc.player);
-        
-        // Place item in armor slot
-        mc.interactionManager.clickSlot(syncId, armorSlotId, 0, SlotActionType.PICKUP, mc.player);
-        
-        // Put remaining item back (if any)
-        mc.interactionManager.clickSlot(syncId, slot, 0, SlotActionType.PICKUP, mc.player);
-    }
-
-    // Helper method to get move yaw (similar to Sn0w's PlayerUtils.getMoveYaw)
-    private float getMoveYaw(float yaw) {
-        if (mc.options.forwardKey.isPressed() && !mc.options.backKey.isPressed()) {
-            if (mc.options.leftKey.isPressed() && !mc.options.rightKey.isPressed()) {
-                yaw -= 45.0f;
-            } else if (mc.options.rightKey.isPressed() && !mc.options.leftKey.isPressed()) {
-                yaw += 45.0f;
-            }
-        } else if (mc.options.backKey.isPressed() && !mc.options.forwardKey.isPressed()) {
-            yaw += 180.0f;
-            if (mc.options.leftKey.isPressed() && !mc.options.rightKey.isPressed()) {
-                yaw += 45.0f;
-            } else if (mc.options.rightKey.isPressed() && !mc.options.leftKey.isPressed()) {
-                yaw -= 45.0f;
-            }
-        } else if (mc.options.leftKey.isPressed() && !mc.options.rightKey.isPressed()) {
-            yaw -= 90.0f;
-        } else if (mc.options.rightKey.isPressed() && !mc.options.leftKey.isPressed()) {
-            yaw += 90.0f;
-        }
-        return MathHelper.wrapDegrees(yaw);
-    }
-
-    // Helper method to get control pitch (similar to Sn0w's ElytraFly.getControlPitch)
-    private float getControlPitch() {
-        if (isBoostedByFirework()) {
-            if (mc.options.jumpKey.isPressed() && !mc.options.sneakKey.isPressed()) {
-                if (MovementUtil.isMoving()) {
-                    return -50f;
-                } else {
-                    return -90.0f;
-                }
-            } else if (mc.options.sneakKey.isPressed() && !mc.options.jumpKey.isPressed()) {
-                if (MovementUtil.isMoving()) {
-                    return 50f;
-                } else {
-                    return 90.0f;
-                }
-            } else {
-                return 0.0f;
-            }
-        } else {
-            if (mc.options.jumpKey.isPressed() && !mc.options.sneakKey.isPressed()) {
-                return -50;
-            } else if (mc.options.sneakKey.isPressed() && !mc.options.jumpKey.isPressed()) {
-                return 50f;
-            } else {
-                return 0.1f;
-            }
-        }
-    }
-
+    /**
+     * 静态方法：检查是否正在使用 Grim 模式飞行
+     */
     public static boolean isGrimFlying() {
-        if (EFly.INSTANCE == null || !EFly.INSTANCE.isOn()) {
+        if (INSTANCE == null || !INSTANCE.isOn()) {
             return false;
         }
-        if (!EFly.INSTANCE.mode.is(Mode.Grim)) {
+        if (!INSTANCE.mode.is(Mode.Grim)) {
             return false;
         }
         int slot = InventoryUtil.findItemInventorySlot(Items.ELYTRA);

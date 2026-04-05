@@ -38,8 +38,8 @@ public class Follower extends Module {
     private final BooleanSetting preventGround;
     
     // Elytra Settings
-    private final BooleanSetting useEFly;
-    private final BooleanSetting useElytraFly;
+    public final BooleanSetting useEFly;
+    public final BooleanSetting useElytraFly;
     private final SliderSetting flySpeed;
     private final SliderSetting verticalSpeed;
     
@@ -216,7 +216,7 @@ public class Follower extends Module {
         }
     }
 
-    @EventListener
+    @EventListener(priority = -9998)
     public void onRotate(final UpdateRotateEvent event) {
         if (Module.nullCheck()) {
             return;

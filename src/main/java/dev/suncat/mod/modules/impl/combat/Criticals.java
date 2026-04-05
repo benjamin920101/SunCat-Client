@@ -16,10 +16,12 @@ package dev.suncat.mod.modules.impl.combat;
 import dev.suncat.api.events.eventbus.EventListener;
 import dev.suncat.api.events.impl.PacketEvent;
 import dev.suncat.api.events.impl.UpdateEvent;
+import dev.suncat.api.utils.math.Timer;
 import dev.suncat.api.utils.player.EntityUtil;
 import dev.suncat.api.utils.player.MovementUtil;
 import dev.suncat.api.utils.world.BlockUtil;
 import dev.suncat.asm.accessors.IPlayerMoveC2SPacket;
+import dev.suncat.core.impl.RotationManager;
 import dev.suncat.mod.modules.Module;
 import dev.suncat.mod.modules.impl.exploit.Blink;
 import dev.suncat.mod.modules.impl.exploit.BowBomb;
@@ -28,11 +30,13 @@ import dev.suncat.mod.modules.impl.player.AutoPearl;
 import dev.suncat.mod.modules.settings.impl.BooleanSetting;
 import dev.suncat.mod.modules.settings.impl.EnumSetting;
 import dev.suncat.mod.modules.settings.impl.SliderSetting;
+import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 
 public class Criticals
@@ -48,17 +52,34 @@ extends Module {
     private final BooleanSetting autoDisable = this.add(new BooleanSetting("AutoDisable", true, () -> this.mode.is(Mode.Ground)));
     private final BooleanSetting crawlingDisable = this.add(new BooleanSetting("CrawlingDisable", true, () -> this.mode.is(Mode.Ground)));
     private final BooleanSetting flight = this.add(new BooleanSetting("Flight", false, () -> this.mode.is(Mode.Ground)));
+    
+    // Grim 模式设置
+    private final BooleanSetting phaseOnly = this.add(new BooleanSetting("PhaseOnly", false, () -> this.mode.is(Mode.Grim) || this.mode.is(Mode.GrimV3)));
+    private final BooleanSetting wallsOnly = this.add(new BooleanSetting("WallsOnly", false, () -> (this.mode.is(Mode.Grim) || this.mode.is(Mode.GrimV3)) && this.phaseOnly.isOpen()));
+    private final BooleanSetting moveFix = this.add(new BooleanSetting("MoveFix", false, () -> this.mode.is(Mode.Grim) || this.mode.is(Mode.GrimV3)));
+    
+    private final Timer attackTimer = new Timer();
+    private boolean postUpdateGround;
+    private boolean postUpdateSprint;
+    
     boolean requireJump = false;
 
     public Criticals() {
         super("Criticals", Module.Category.Combat);
         this.setChinese("\u5200\u5200\u66b4\u51fb");
         INSTANCE = this;
+        this.attackTimer.setMs(999999);
     }
 
     @Override
     public String getInfo() {
         return this.mode.getValue().name();
+    }
+
+    @Override
+    public void onDisable() {
+        this.postUpdateGround = false;
+        this.postUpdateSprint = false;
     }
 
     @EventListener
@@ -154,7 +175,7 @@ extends Module {
 
     public void doCrit(Entity entity) {
         switch (this.mode.getValue().ordinal()) {
-            case 7: {
+            case 7: { // BBTT
                 if (MovementUtil.isMoving() || !MovementUtil.isStatic()) {
                     return;
                 }
@@ -163,7 +184,7 @@ extends Module {
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 0.045, Criticals.mc.player.getZ(), false));
                 break;
             }
-            case 1: {
+            case 1: { // Strict
                 Criticals.mc.player.addCritParticles(entity);
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 0.062600301692775, Criticals.mc.player.getZ(), false));
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 0.07260029960661, Criticals.mc.player.getZ(), false));
@@ -171,26 +192,26 @@ extends Module {
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY(), Criticals.mc.player.getZ(), false));
                 break;
             }
-            case 2: {
+            case 2: { // NCP
                 Criticals.mc.player.addCritParticles(entity);
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 0.0625, Criticals.mc.player.getZ(), false));
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY(), Criticals.mc.player.getZ(), false));
                 break;
             }
-            case 3: {
+            case 3: { // OldNCP
                 Criticals.mc.player.addCritParticles(entity);
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 1.058293536E-5, Criticals.mc.player.getZ(), false));
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 9.16580235E-6, Criticals.mc.player.getZ(), false));
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 1.0371854E-7, Criticals.mc.player.getZ(), false));
                 break;
             }
-            case 0: {
+            case 0: { // UpdatedNCP
                 Criticals.mc.player.addCritParticles(entity);
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 2.71875E-7, Criticals.mc.player.getZ(), false));
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY(), Criticals.mc.player.getZ(), false));
                 break;
             }
-            case 4: {
+            case 4: { // Hypixel2K22
                 Criticals.mc.player.addCritParticles(entity);
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 0.0045, Criticals.mc.player.getZ(), true));
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 1.52121E-4, Criticals.mc.player.getZ(), false));
@@ -198,12 +219,143 @@ extends Module {
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 0.025, Criticals.mc.player.getZ(), false));
                 break;
             }
-            case 5: {
+            case 5: { // Packet
                 Criticals.mc.player.addCritParticles(entity);
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 5.0E-4, Criticals.mc.player.getZ(), false));
                 mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.PositionAndOnGround(Criticals.mc.player.getX(), Criticals.mc.player.getY() + 1.0E-4, Criticals.mc.player.getZ(), false));
+                break;
+            }
+            case 8: { // Grim - 从 Shoreline 移植
+                handleGrimCrit(entity);
+                break;
+            }
+            case 9: { // GrimV3 - 从 Shoreline 移植
+                handleGrimV3Crit(entity);
+                break;
             }
         }
+    }
+
+    /**
+     * Grim 模式刀爆逻辑 (针对 Grim v2 优化)
+     */
+    private void handleGrimCrit(Entity entity) {
+        // 检查是否被拦截
+        if (this.phaseOnly.getValue() && (this.wallsOnly.getValue() ? !isDoublePhased() : !isPhased())) {
+            return;
+        }
+
+        // MoveFix 检查
+        if (this.moveFix.getValue() && MovementUtil.isMoving()) {
+            return;
+        }
+
+        // Timer 检查
+        if (!this.attackTimer.passed(250) || !mc.player.isOnGround() || mc.player.isCrawling()) {
+            return;
+        }
+
+        // 获取当前坐标和旋转角度
+        double x = mc.player.getX();
+        double y = mc.player.getY();
+        double z = mc.player.getZ();
+        float yaw = RotationManager.INSTANCE.getLastYaw();
+        float pitch = RotationManager.INSTANCE.getLastPitch();
+
+        // --- Grim v2 绕过序列 ---
+        // 核心原理：通过瞬间的 Y 轴变化，让服务器认为你处于 "起跳后下落" 的状态
+        
+        // 1. 模拟起跳 (Y + 0.0625)
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(
+            x, y + 0.0625, z, yaw, pitch, false));
+            
+        // 2. 立即下落 (回到原位)
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(
+            x, y, z, yaw, pitch, false));
+            
+        // 3. 极微小位移 (1.0E-7)，用于绕过某些版本的严格移动检测
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(
+            x, y + 1.0E-7, z, yaw, pitch, false));
+            
+        // 4. 再次确认状态
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(
+            x, y, z, yaw, pitch, false));
+
+        // 添加暴击粒子
+        mc.player.addCritParticles(entity);
+        
+        // 重置计时器
+        this.attackTimer.reset();
+    }
+
+    /**
+     * GrimV3 模式刀爆逻辑 (来自 Shoreline)
+     */
+    private void handleGrimV3Crit(Entity entity) {
+        // PhaseOnly 检查
+        if (this.phaseOnly.getValue() && (this.wallsOnly.getValue() ? !isDoublePhased() : !isPhased())) {
+            return;
+        }
+
+        // MoveFix 检查
+        if (this.moveFix.getValue() && MovementUtil.isMoving()) {
+            return;
+        }
+
+        // 检查是否在地面上且未爬行
+        if (!mc.player.isOnGround() || mc.player.isCrawling()) {
+            return;
+        }
+
+        // 获取旋转角度
+        float yaw = RotationManager.INSTANCE.getLastYaw();
+        float pitch = RotationManager.INSTANCE.getLastPitch();
+
+        // 发送 GrimV3 模式假地面包
+        mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.Full(
+            mc.player.getX(), mc.player.getY(), mc.player.getZ(), 
+            yaw, pitch, true));
+        mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.Full(
+            mc.player.getX(), mc.player.getY() + 0.0625f, mc.player.getZ(), 
+            yaw, pitch, false));
+        mc.getNetworkHandler().sendPacket((Packet)new PlayerMoveC2SPacket.Full(
+            mc.player.getX(), mc.player.getY() + 0.04535f, mc.player.getZ(), 
+            yaw, pitch, false));
+
+        // 添加暴击粒子
+        mc.player.addCritParticles(entity);
+    }
+
+    /**
+     * 检查是否完全被困在方块中（双相检测）
+     */
+    private boolean isDoublePhased() {
+        for (BlockPos pos : BlockPos.iterate(
+            BlockPos.ofFloored(mc.player.getBoundingBox().minX, mc.player.getBoundingBox().minY, mc.player.getBoundingBox().minZ),
+            BlockPos.ofFloored(mc.player.getBoundingBox().maxX, mc.player.getBoundingBox().maxY, mc.player.getBoundingBox().maxZ)
+        )) {
+            BlockState state = mc.world.getBlockState(pos);
+            BlockState state2 = mc.world.getBlockState(pos.up());
+            if (state.blocksMovement() && state2.blocksMovement()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 检查是否部分被困在方块中（单相检测）
+     */
+    private boolean isPhased() {
+        for (BlockPos pos : BlockPos.iterate(
+            BlockPos.ofFloored(mc.player.getBoundingBox().minX, mc.player.getBoundingBox().minY, mc.player.getBoundingBox().minZ),
+            BlockPos.ofFloored(mc.player.getBoundingBox().maxX, mc.player.getBoundingBox().maxY, mc.player.getBoundingBox().maxZ)
+        )) {
+            if (mc.world.getBlockState(pos).blocksMovement()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static Entity getEntity(PlayerInteractEntityC2SPacket packet) {
@@ -239,7 +391,9 @@ extends Module {
         Hypixel2K22,
         Packet,
         Ground,
-        BBTT;
+        BBTT,
+        Grim,
+        GrimV3;
 
     }
 }

@@ -17,6 +17,9 @@ public interface IClientPlayerEntity {
     @Accessor(value="ticksSinceLastPositionPacketSent")
     public void setTicksSinceLastPositionPacketSent(int var1);
 
+    @Accessor(value="ticksSinceLastPositionPacketSent")
+    public int getTicksSinceLastPositionPacketSent();
+
     @Accessor(value="lastYaw")
     public float getLastYaw();
 

@@ -316,6 +316,11 @@ extends Mod {
         return setting;
     }
 
+    public dev.suncat.mod.modules.settings.impl.ModuleListSetting add(dev.suncat.mod.modules.settings.impl.ModuleListSetting setting) {
+        this.addSetting(setting);
+        return setting;
+    }
+
     public List<Setting> getSettings() {
         return this.settings;
     }
@@ -335,6 +340,13 @@ extends Mod {
     }
 
     public static enum Category {
+        AntiCheatFree{
+
+            @Override
+            public String getIcon() {
+                return "c";
+            }
+        },
         Combat{
 
             @Override
@@ -417,6 +429,9 @@ extends Mod {
                     }
                     case Client: {
                         return "客户端类";
+                    }
+                    case AntiCheatFree: {
+                        return "反作弊免费版";
                     }
                 }
             }

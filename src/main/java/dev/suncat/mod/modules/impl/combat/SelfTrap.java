@@ -103,7 +103,7 @@ public class SelfTrap extends Module
         this.chest = this.add(new BooleanSetting("Chest", true, () -> this.page.is(Page.General)));
         this.support = this.add(new BooleanSetting("Support", false, () -> this.page.is(Page.General)));
         this.mineExtend = this.add(new BooleanSetting("MineExtend", false, () -> this.page.is(Page.General)));
-        this.headExtend = this.add(new BooleanSetting("HeadExtend", false, () -> this.page.is(Page.General) && this.mineExtend.isOpen()));
+        this.headExtend = this.add(new BooleanSetting("HeadExtend", false, () -> this.page.is(Page.General) && this.head.isOpen()));
         this.timingMode = this.add(new EnumSetting<TimingMode>("TimingMode", TimingMode.VANILLA, () -> this.page.is(Page.General)));
         this.prePlaceExplosion = this.add(new BooleanSetting("PrePlace-Explosion", false, () -> this.page.is(Page.General) && this.timingMode.getValue() == TimingMode.SEQUENTIAL));
         this.prePlaceTick = this.add(new BooleanSetting("PrePlace-Tick", false, () -> this.page.is(Page.General) && this.timingMode.getValue() == TimingMode.SEQUENTIAL));
@@ -492,12 +492,14 @@ public class SelfTrap extends Module
     
     private void doHeadCross(final BlockPos pos) {
         final BlockPos headPos = pos.up(2);
-        for (final Direction dir : Direction.values()) {
-            if (dir != Direction.UP) {
-                if (dir != Direction.DOWN) {
-                    final BlockPos trapPos = headPos.offset(dir);
-                    if (this.canPlaceBlock(trapPos)) {
-                        this.tryPlaceBlock(trapPos);
+        if (this.headExtend.getValue()) {
+            for (final Direction dir : Direction.values()) {
+                if (dir != Direction.UP) {
+                    if (dir != Direction.DOWN) {
+                        final BlockPos trapPos = headPos.offset(dir);
+                        if (this.canPlaceBlock(trapPos)) {
+                            this.tryPlaceBlock(trapPos);
+                        }
                     }
                 }
             }

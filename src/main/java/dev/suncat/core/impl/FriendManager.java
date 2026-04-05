@@ -41,16 +41,19 @@ extends Manager {
 
     public void remove(String name) {
         this.friendList.remove(name);
+        this.save();
     }
 
     public void add(String name) {
         if (!this.friendList.contains(name)) {
             this.friendList.add(name);
         }
+        this.save();
     }
 
     public void friend(PlayerEntity entity) {
         this.friend(entity.getGameProfile().getName());
+        this.save();
     }
 
     public void friend(String name) {
