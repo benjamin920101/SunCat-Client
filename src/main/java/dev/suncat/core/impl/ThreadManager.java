@@ -34,7 +34,7 @@ import net.minecraft.util.math.BlockPos;
 
 public class ThreadManager
 implements Wrapper {
-    public static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
+    public static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     public static ClientService clientService;
     public volatile Iterable<Entity> threadSafeEntityList = Collections.emptyList();
     public volatile List<AbstractClientPlayerEntity> threadSafePlayersList = Collections.emptyList();
